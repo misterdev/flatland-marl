@@ -18,6 +18,7 @@ env = RailEnv(
 
 env_renderer = RenderTool(env)
 
+
 def my_controller():
     """
     You are supposed to write this controller
@@ -26,6 +27,7 @@ def my_controller():
     for _idx in range(NUMBER_OF_AGENTS):
         _action[_idx] = np.random.randint(0, 5)
     return _action
+
 
 for step in range(100):
 

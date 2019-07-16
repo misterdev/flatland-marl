@@ -1,15 +1,20 @@
-import flatland
-from flatland.envs.generators import rail_from_manual_specifications_generator, random_rail_generator
+import random
+
+import numpy as np
+
+from flatland.envs.generators import random_rail_generator
 from flatland.envs.observations import TreeObsForRailEnv
 from flatland.envs.rail_env import RailEnv
 from flatland.utils.rendertools import RenderTool
 
+random.seed(100)
+np.random.seed(100)
 
 # Relative weights of each cell type to be used by the random rail generators.
-transition_probability = [1.0,  # empty cell - Case 0
+transition_probability = [1.0,  # Case 0 - empty cell
                           1.0,  # Case 1 - straight
                           1.0,  # Case 2 - simple switch
-                          0.3,  # Case 3 - diamond drossing
+                          0.3,  # Case 3 - diamond crossing
                           0.5,  # Case 4 - single slip
                           0.5,  # Case 5 - double slip
                           0.2,  # Case 6 - symmetrical
@@ -21,16 +26,18 @@ transition_probability = [1.0,  # empty cell - Case 0
 # Example generate a random rail
 env = RailEnv(width=10,
               height=10,
-              rail_generator=random_rail_generator(
-                        cell_type_relative_proportion=transition_probability
-                        ),
+              rail_generator=random_rail_generator(cell_type_relative_proportion=transition_probability),
               number_of_agents=3,
               obs_builder_object=TreeObsForRailEnv(max_depth=2))
 
+env.reset()
+
 env_renderer = RenderTool(env)
+# TODO why twice?
+env_renderer.renderEnv(show=True)
 env_renderer.renderEnv(show=True)
 
-handles = env.get_agent_handles()
-action_dict = {handles[0]:0, handles[1]:0}
-obs, all_rewards, done, _ = env.step(action_dict)
+# This gives a summarized views of the grid
+# env_renderer_summary = RenderTool(env, gl="PIL")
 
+input("Press Enter to continue...")
