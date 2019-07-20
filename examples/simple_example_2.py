@@ -10,7 +10,8 @@ from flatland.utils.rendertools import RenderTool
 random.seed(100)
 np.random.seed(100)
 
-# Relative weights of each cell type to be used by the random rail generators.
+# Relative weights of each cell type to be used by the random rail generators
+# 'weights' increase or decrease the proportion of the cell in the generated rail networks
 transition_probability = [1.0,  # Case 0 - empty cell
                           1.0,  # Case 1 - straight
                           1.0,  # Case 2 - simple switch

@@ -33,6 +33,6 @@ for step in range(100):
 
     _action = my_controller()
     obs, all_rewards, done, _ = env.step(_action)
-    print("Rewards: {}, [done={}]".format( all_rewards, done))
+    print("Rewards: {}, [done={}]".format(all_rewards, done))
     env_renderer.renderEnv(show=True, frames=False, show_observations=False)
     time.sleep(0.3)

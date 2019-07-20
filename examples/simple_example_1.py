@@ -25,14 +25,14 @@ specs = [[(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0)],
 env = RailEnv(width=6,
               height=4,
               rail_generator=rail_from_manual_specifications_generator(specs),
-              number_of_agents=1,
-              obs_builder_object=TreeObsForRailEnv(max_depth=2))
+              number_of_agents=1,  # agent position is chosen randomly
+              obs_builder_object=TreeObsForRailEnv(max_depth=2))  # red squares mark the obs tree
 
 env.reset()
 
 env_renderer = RenderTool(env)
 env_renderer.renderEnv(show=True)
 env_renderer.renderEnv(show=True)
-# TODO perché alcuni quadretti sono rossi?
+
 
 input("Press Enter to continue...")
