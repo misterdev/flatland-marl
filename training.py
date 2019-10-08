@@ -20,8 +20,9 @@ from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 
 from flatland.envs.schedule_generators import sparse_schedule_generator
-from torch_training.dueling_double_dqn import Agent # TODO define own agent, use two time step alg?
-# from utils.observation_utils import normalize_observation  TODO normalization techniques
+from torch_training.dueling_double_dqn import DQNAgent
+from torch_training.utils import preprocess_obs
+# from utils.observation_utils import normalize_observation
 
 
 def main(argv):
@@ -107,7 +108,7 @@ def main(argv):
     agent_next_obs = [None] * env.get_num_agents()
 
     # Initialize the agent
-    agent = Agent(action_size, env.width, env.height)
+    agent = DQNAgent(action_size, double_dqn=False)
 
     # Here you can pre-load an agent
     #if False:
@@ -158,9 +159,8 @@ def main(argv):
 
         # Build agent specific observations
         for a in range(env.get_num_agents()):
-            # For now, simply concat layers along last axis
-            agent_obs[a] = np.concatenate((obs[a][0], obs[a][1], obs[a][2]), axis=2)
-            
+            agent_obs[a] = preprocess_obs(obs[a])
+
         score = 0
         env_done = 0
 
@@ -182,7 +182,7 @@ def main(argv):
 
             # Build agent specific observations and normalize
             for a in range(env.get_num_agents()):
-                agent_next_obs[a] = np.concatenate((obs[a][0], obs[a][1], obs[a][2]), axis=2)
+                agent_next_obs[a] = preprocess_obs(obs[a])
 
             # Update replay buffer and train agent
             for a in range(env.get_num_agents()):
