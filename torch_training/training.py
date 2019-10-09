@@ -45,7 +45,6 @@ def main(argv):
     x_dim = 20
     y_dim = 20
     n_agents = 3
-    tree_depth = 2
 
     # Use the malfunction generator to break agents from time to time
     stochastic_data = {'prop_malfunction': 0.1,  # Percentage of defective agents
@@ -108,7 +107,7 @@ def main(argv):
     agent_next_obs = [None] * env.get_num_agents()
 
     # Initialize the agent
-    agent = DQNAgent(action_size, double_dqn=False)
+    agent = DQNAgent(action_size, double_dqn=True)
 
     # Here you can pre-load an agent
     #if False:

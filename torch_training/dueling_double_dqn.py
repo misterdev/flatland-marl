@@ -8,15 +8,15 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from torch_training.model import ConvQNetwork, Dueling_DQN
+from torch_training.model import Dueling_DQN
 
 # Params for ReplayBuffer class
 BUFFER_SIZE = int(1e5)  # replay buffer size
-BATCH_SIZE = 512  # minibatch size = 512
+BATCH_SIZE = 32  # minibatch size = 512
 
 GAMMA = 0.99  # discount factor 0.99
 TAU = 1e-3  # for soft update of target parameters
-LR = 0.5e-4  # learning rate 0.5e-4 works
+LR = 0.5e-4  # learning rate 0.5e-4
 UPDATE_EVERY = 10  # how often to update the network
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
