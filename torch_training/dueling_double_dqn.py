@@ -11,8 +11,8 @@ import torch.optim as optim
 from torch_training.model import Dueling_DQN
 
 # Params for ReplayBuffer class
-BUFFER_SIZE = int(1e5)  # replay buffer size
-BATCH_SIZE = 32  # minibatch size = 512
+BUFFER_SIZE = int(1e5)  # replay buffer size, that is size of the memory keeping the experiences, 1e5
+BATCH_SIZE = 512  # minibatch size = 512
 
 GAMMA = 0.99  # discount factor 0.99
 TAU = 1e-3  # for soft update of target parameters
@@ -42,7 +42,7 @@ class DQNAgent:
         self.double_dqn = double_dqn
         # Q-Network
         #self.qnetwork_local = ConvQNetwork().to(device) 
-        self.qnetwork_local = Dueling_DQN(in_channels=22, num_actions=5).to(device)
+        self.qnetwork_local = Dueling_DQN(in_channels=23, num_actions=5).to(device)
         self.qnetwork_target = copy.deepcopy(self.qnetwork_local)
 
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
@@ -65,7 +65,7 @@ class DQNAgent:
 
     def step(self, state, action, reward, next_state, done, train=True):
         # Save experience in replay memory
-        # state: (22, 200, 200) tutta la griglia + 22 channels
+        # state: (input_channels=23, 200, 200) tutta la griglia + input_channels=23
         self.memory.add(state, action, reward, next_state, done)
 
         # Learn every UPDATE_EVERY time steps.
@@ -200,7 +200,7 @@ class ReplayBuffer:
         # means states are actually states (not actions, or rewards...)
         if isinstance(states[0], Iterable):
             sub_dim = len(states[0][0])
-            np_states = np.reshape(np.array(states), (len(states), sub_dim, 200, 200))
+            np_states = np.reshape(np.array(states), (len(states), sub_dim, 40,  40)) # TODO add param in_channels
         else:
             sub_dim = 1
             np_states = np.reshape(np.array(states), (len(states), sub_dim))

@@ -61,7 +61,7 @@ class ConvQNetwork(nn.Module):
         return val + adv - adv.mean()
 
 
-# implementazione basata sul paper originale
+# implementazione basata sul paper originale https://github.com/dxyang/DQN_pytorch
 class Dueling_DQN(nn.Module):
     def __init__(self, in_channels, num_actions):
         super(Dueling_DQN, self).__init__()
@@ -71,7 +71,7 @@ class Dueling_DQN(nn.Module):
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
         
-        conv_width = conv_height = conv2d_size_out(conv2d_size_out(conv2d_size_out(200, 8, 4), 4, 2), 3, 1)
+        conv_width = conv_height = conv2d_size_out(conv2d_size_out(conv2d_size_out(in_channels, 8, 4), 4, 2), 3, 1)
         
         #self.fc1_adv = nn.Linear(in_features=7 * 7 * 64, out_features=512)
         #self.fc1_val = nn.Linear(in_features=7 * 7 * 64, out_features=512)
@@ -98,3 +98,4 @@ class Dueling_DQN(nn.Module):
 
         x = val + adv - adv.mean(1).unsqueeze(1).expand(x.size(0), self.num_actions)
         return x
+    
