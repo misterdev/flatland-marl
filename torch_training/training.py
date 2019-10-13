@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from flatland.envs.observations import GlobalObsForRailEnv
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
@@ -20,7 +19,8 @@ from flatland.utils.rendertools import RenderTool
 
 
 from torch_training.dueling_double_dqn import DQNAgent
-from torch_training.utils import preprocess_obs, compute_all_possible_transitions, convert_transitions_map
+from torch_training.utils import preprocess_obs
+from torch_training.global_observations import CustomGlobalObsForRailEnv
 
 def main(argv):
     try:
@@ -40,7 +40,6 @@ def main(argv):
     y_dim = 40
     n_agents = 4
 
-
     # Use a the malfunction generator to break agents from time to time
     stochastic_data = {'prop_malfunction': 0.05,  # Percentage of defective agents
                        'malfunction_rate': 50,  # Rate of malfunction occurence
@@ -55,7 +54,7 @@ def main(argv):
                         1. / 3.: 0.25,  # Slow commuter train
                         1. / 4.: 0.25}  # Slow freight train
 
-    observation_builder = GlobalObsForRailEnv()
+    observation_builder = CustomGlobalObsForRailEnv()
     
     env = RailEnv(width=x_dim,
                   height=y_dim,

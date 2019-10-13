@@ -2,14 +2,11 @@ import numpy as np
 from flatland.utils import graphics_pil
 from flatland.core.grid.rail_env_grid import RailEnvTransitions
 
-# TODO Do the conversion inside an ObserverObject directly...
 # Given observations of one agent, perform preprocessing necessary before feeding to the NN
 def preprocess_obs(obs, input_channels, max_env_width, max_env_height):
-    
-    # Convert 16-channel for rail obs to 2-channel
-    two_channel_obs = convert_transitions_map(obs[0])
+
     # Concatenate info about rail, agent and targets
-    agent_obs = np.concatenate((two_channel_obs, obs[1], obs[2]), axis=2)
+    agent_obs = np.concatenate((obs[0], obs[1], obs[2]), axis=2)
     # Reshape for PyTorch CNN - BCHW
     # from (env_width, env_height, in_channels=22) to (batch_size, in_channels=22, env_height, env_width)
     # agent_obs[a] = np.expand_dims(np.transpose(agent_obs[a], (2, 1, 0)), axis=0)
@@ -19,10 +16,6 @@ def preprocess_obs(obs, input_channels, max_env_width, max_env_height):
     pad_agent_obs[:agent_obs.shape[0], :agent_obs.shape[1], :agent_obs.shape[2]] = agent_obs
 
     return pad_agent_obs
-
-def convert_pil_to_nparray():
-
-    pass
 
 
 # Given transitions list considering cell types outputs all possible transitions bitmap considering cell rotations too
@@ -74,3 +67,8 @@ def convert_transitions_map(obs_transitions_map):
             new_transitions_map[i, j] = possible_transitions_dict[int_transition_bitmap]
 
     return new_transitions_map
+
+
+def convert_pil_to_nparray():
+
+    pass

@@ -67,16 +67,16 @@ class Dueling_DQN(nn.Module):
         super(Dueling_DQN, self).__init__()
         self.num_actions = num_actions
 
-        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=32, kernel_size=8, stride=4)
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=32, kernel_size=4, stride=4) # TODO kernel_size at this layer should be 8
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
         
-        conv_width = conv_height = conv2d_size_out(conv2d_size_out(conv2d_size_out(in_channels, 8, 4), 4, 2), 3, 1)
+        conv_width = conv_height = conv2d_size_out(conv2d_size_out(conv2d_size_out(in_channels, 4, 4), 4, 2), 3, 1)
         
         #self.fc1_adv = nn.Linear(in_features=7 * 7 * 64, out_features=512)
         #self.fc1_val = nn.Linear(in_features=7 * 7 * 64, out_features=512)
 
-        self.fc1_adv = nn.Linear(in_features=conv_width * conv_height * 64, out_features=512) # TODO 64 come gli out_channels??
+        self.fc1_adv = nn.Linear(in_features=conv_width * conv_height * 64, out_features=512) # TODO 64 sono gli out_channels??
         self.fc1_val = nn.Linear(in_features=conv_width * conv_height * 64, out_features=512)
         self.fc2_adv = nn.Linear(in_features=512, out_features=num_actions)
         self.fc2_val = nn.Linear(in_features=512, out_features=1)
