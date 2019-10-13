@@ -1,16 +1,21 @@
 import numpy as np
 from flatland.utils import graphics_pil
+from flatland.core.grid.rail_env_grid import RailEnvTransitions
 
-
+# TODO Do the conversion inside an ObserverObject directly...
 # Given observations of one agent, perform preprocessing necessary before feeding to the NN
-def preprocess_obs(obs, input_channels, env_width, env_height):
-    agent_obs = np.concatenate((obs[0], obs[1], obs[2]), axis=2)
+def preprocess_obs(obs, input_channels, max_env_width, max_env_height):
+    
+    # Convert 16-channel for rail obs to 2-channel
+    two_channel_obs = convert_transitions_map(obs[0])
+    # Concatenate info about rail, agent and targets
+    agent_obs = np.concatenate((two_channel_obs, obs[1], obs[2]), axis=2)
     # Reshape for PyTorch CNN - BCHW
-    # from (env_width, env_height, channels=22) to (batch_size, channels=22, env_height, env_width)
+    # from (env_width, env_height, in_channels=22) to (batch_size, in_channels=22, env_height, env_width)
     # agent_obs[a] = np.expand_dims(np.transpose(agent_obs[a], (2, 1, 0)), axis=0)
     agent_obs = np.transpose(agent_obs, (2, 1, 0))
     # Pad the array to have HxW = 200X200
-    pad_agent_obs = np.zeros((input_channels, env_width, env_height)) # TODO check if order env_width/env_height is correct
+    pad_agent_obs = np.zeros((input_channels, max_env_width, max_env_height)) # TODO check if order env_width/env_height is correct
     pad_agent_obs[:agent_obs.shape[0], :agent_obs.shape[1], :agent_obs.shape[2]] = agent_obs
 
     return pad_agent_obs
@@ -19,6 +24,14 @@ def convert_pil_to_nparray():
 
     pass
 
+
+# Given transitions list considering cell types outputs all possible transitions bitmap considering cell rotations too
+def compute_all_possible_transitions():
+    
+    # Bitmaps are read in decimal numbers
+    transitions = RailEnvTransitions()
+    transition_list = transitions.transition_list
+    '''
     transition_list = [int('0000000000000000', 2),  # empty cell - Case 0
                        int('1000000000100000', 2),  # Case 1 - straight
                        int('1001001000100000', 2),  # Case 2 - simple switch
@@ -30,72 +43,34 @@ def convert_pil_to_nparray():
                        int('0100000000000010', 2),  # Case 1b (8)  - simple turn right
                        int('0001001000000000', 2),  # Case 1c (9)  - simple turn left
                        int('1100000000100010', 2)]  # Case 2b (10) - simple switch mirrored
-    
+    '''
+
+    transitions_with_rotation_dict = {}
+    rotation_degrees = [0, 90, 180, 270]
+
+    for i in range(len(transition_list)):
+        for r in rotation_degrees:
+            t = transition_list[i]
+            rot_transition = transitions.rotate_transition(t, r)
+            if rot_transition not in transitions_with_rotation_dict:
+                transitions_with_rotation_dict[rot_transition] = np.array([i, r])
+
+    return transitions_with_rotation_dict
+
+
 # Given np.array of shape (env_width_ env_height, 16) convert to (env_width, env_height, 2) where
 # the first channel encodes cell_types (0,.. 10) and the second channel orientation (0, 90, 180, 270 as 0 1 2 3)
 # see rail_env_grid.py
-def convert_transitions_map(transitions_map):
-    
-    new_transitions_map = np.zeros((transitions_map.shape[0], transitions_map.shape[1], 2))
-    for i in range(transitions_map.shape[0]):
-        for j in range(transitions_map.shape[1]):
-            transition_bitmap = transitions_map[i, j]
-            # Empty cell - cell_type 0, rotation 0
-            if np.array_equal(transition_bitmap, np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])):
-                new_transitions_map[i, j] = np.array([0, 0])
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Straight - cell type 1
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Simple switch - cell type 2
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Diamond crossing - cell type 3
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Single slip - cell type 4
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Double slip - cell type 5
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Symmetrical - cell type 6
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Dead-end - cell type 7
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Simple turn right - cell type 8
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Simple turn left - cell type 9
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            # Simple switch mirrored - cell type 10
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
-            elif np.array_equal(transition_bitmap, np.array())
+def convert_transitions_map(obs_transitions_map):
 
+    new_transitions_map = np.zeros((obs_transitions_map.shape[0], obs_transitions_map.shape[1], 2))
+    possible_transitions_dict = compute_all_possible_transitions()
 
-    pass
+    for i in range(obs_transitions_map.shape[0]):
+        for j in range(obs_transitions_map.shape[1]):
+            transition_bitmap = obs_transitions_map[i, j]
+            # Convert bitmap to int binario
+            int_transition_bitmap = int(transition_bitmap.dot(2 ** np.arange(transition_bitmap.size)[::-1]))
+            new_transitions_map[i, j] = possible_transitions_dict[int_transition_bitmap]
+
+    return new_transitions_map

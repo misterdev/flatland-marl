@@ -20,7 +20,7 @@ from flatland.utils.rendertools import RenderTool
 
 
 from torch_training.dueling_double_dqn import DQNAgent
-from torch_training.utils import preprocess_obs
+from torch_training.utils import preprocess_obs, compute_all_possible_transitions, convert_transitions_map
 
 def main(argv):
     try:
@@ -36,9 +36,10 @@ def main(argv):
     np.random.seed(1)
 
     # Parameters for the Environment
-    x_dim = 200
-    y_dim = 200
+    x_dim = 40
+    y_dim = 40
     n_agents = 4
+
 
     # Use a the malfunction generator to break agents from time to time
     stochastic_data = {'prop_malfunction': 0.05,  # Percentage of defective agents
@@ -109,12 +110,10 @@ def main(argv):
 
         # Reset environment
         obs, info = env.reset(True, True)
-        #env_renderer.reset()
-        #img = env_renderer.gl.get_image()
 
         # Build agent specific observations
         for a in range(env.get_num_agents()):
-            agent_obs[a] = preprocess_obs(obs[a], input_channels=23, env_width=x_dim, env_height=y_dim)
+            agent_obs[a] = preprocess_obs(obs[a], input_channels=9, max_env_width=40, max_env_height=40)
             agent_obs_buffer[a] = agent_obs[a].copy()
 
         # Reset score and done
@@ -150,7 +149,8 @@ def main(argv):
 
                     agent_obs_buffer[a] = agent_obs[a].copy()
                     agent_action_buffer[a] = action_dict[a]
-                agent_obs[a] = preprocess_obs(next_obs[a], input_channels=23, env_width=x_dim, env_height=y_dim)
+
+                agent_obs[a] = preprocess_obs(next_obs[a], input_channels=9, max_env_width=40, max_env_height=40)
 
                 score += all_rewards[a] / env.get_num_agents()
 

@@ -42,7 +42,7 @@ class DQNAgent:
         self.double_dqn = double_dqn
         # Q-Network
         #self.qnetwork_local = ConvQNetwork().to(device) 
-        self.qnetwork_local = Dueling_DQN(in_channels=23, num_actions=5).to(device)
+        self.qnetwork_local = Dueling_DQN(in_channels=9, num_actions=5).to(device)
         self.qnetwork_target = copy.deepcopy(self.qnetwork_local)
 
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
@@ -200,7 +200,7 @@ class ReplayBuffer:
         # means states are actually states (not actions, or rewards...)
         if isinstance(states[0], Iterable):
             sub_dim = len(states[0][0])
-            np_states = np.reshape(np.array(states), (len(states), sub_dim, 40,  40)) # TODO add param in_channels
+            np_states = np.reshape(np.array(states), (len(states), sub_dim, 40,  40)) # TODO add param env_width env_height
         else:
             sub_dim = 1
             np_states = np.reshape(np.array(states), (len(states), sub_dim))

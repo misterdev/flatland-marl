@@ -76,7 +76,7 @@ class Dueling_DQN(nn.Module):
         #self.fc1_adv = nn.Linear(in_features=7 * 7 * 64, out_features=512)
         #self.fc1_val = nn.Linear(in_features=7 * 7 * 64, out_features=512)
 
-        self.fc1_adv = nn.Linear(in_features=conv_width * conv_height * 64, out_features=512) # 64 come gli out_channels??
+        self.fc1_adv = nn.Linear(in_features=conv_width * conv_height * 64, out_features=512) # TODO 64 come gli out_channels??
         self.fc1_val = nn.Linear(in_features=conv_width * conv_height * 64, out_features=512)
         self.fc2_adv = nn.Linear(in_features=512, out_features=num_actions)
         self.fc2_val = nn.Linear(in_features=512, out_features=1)
