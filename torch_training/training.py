@@ -15,7 +15,6 @@ import torch
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
-from flatland.utils.rendertools import RenderTool
 
 
 from torch_training.dueling_double_dqn import DQNAgent

@@ -1,5 +1,4 @@
 import numpy as np
-from flatland.utils import graphics_pil
 from flatland.core.grid.rail_env_grid import RailEnvTransitions
 
 # Given observations of one agent, perform preprocessing necessary before feeding to the NN
