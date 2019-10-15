@@ -21,7 +21,6 @@ from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import complex_rail_generator
 from flatland.envs.schedule_generators import complex_schedule_generator
 
-# Import Torch and utility functions to normalize observation
 import fc_treeobs.nets
 from fc_treeobs.dueling_double_dqn import Agent
 from fc_treeobs.utils import norm_obs_clip, split_tree_into_feature_groups
@@ -47,7 +46,7 @@ def main(argv):
     n_agents = np.random.randint(3, 8)
     n_goals = n_agents + np.random.randint(0, 3)
     min_dist = int(0.75 * min(x_dim, y_dim))
-    tree_depth = 2
+    tree_depth = 3
     print("main2")
     demo = False
 

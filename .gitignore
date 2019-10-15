@@ -2,3 +2,6 @@ __pycache__/
 .idea/
 cnn_globalobs/nets/
 fc_treeobs/nets/
+bot_config.txt
+
+*.png
