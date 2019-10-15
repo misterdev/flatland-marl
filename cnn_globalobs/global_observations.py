@@ -12,7 +12,7 @@ from flatland.core.env_observation_builder import ObservationBuilder
 
 from flatland.envs.agent_utils import RailAgentStatus, EnvAgent
 
-from torch_training.utils import convert_transitions_map
+from cnn_globalobs.utils import convert_transitions_map
 
 
 class CustomGlobalObsForRailEnv(ObservationBuilder):

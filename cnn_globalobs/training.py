@@ -16,10 +16,10 @@ from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
 
+from cnn_globalobs.dueling_double_dqn import DQNAgent
+from cnn_globalobs.utils import preprocess_obs
+from cnn_globalobs.global_observations import CustomGlobalObsForRailEnv
 
-from torch_training.dueling_double_dqn import DQNAgent
-from torch_training.utils import preprocess_obs
-from torch_training.global_observations import CustomGlobalObsForRailEnv
 
 def main(argv):
     try:
@@ -187,7 +187,7 @@ def main(argv):
                     100 * np.mean(done_window),
                     eps, action_prob / np.sum(action_prob)))
             torch.save(agent.qnetwork_local.state_dict(),
-                       './Nets/avoider_checkpoint' + str(trials) + '.pth')
+                       './nets/avoider_checkpoint' + str(trials) + '.pth')
             action_prob = [1] * action_size
 
     # Plot overall training progress at the end
