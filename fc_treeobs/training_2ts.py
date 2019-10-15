@@ -4,16 +4,22 @@ import random
 import sys
 from collections import deque
 
+# make sure the root path is in system path
+from pathlib import Path
+base_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(base_dir))
+
+from importlib_resources import path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+
 from flatland.envs.observations import TreeObsForRailEnv
 from flatland.envs.predictions import ShortestPathPredictorForRailEnv
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import complex_rail_generator
-# Import Flatland/ Observations and Predictors
 from flatland.envs.schedule_generators import complex_schedule_generator
-from importlib_resources import path
 
 # Import Torch and utility functions to normalize observation
 import fc_treeobs.nets
