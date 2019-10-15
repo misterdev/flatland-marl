@@ -85,7 +85,7 @@ def main(argv):
     # Define training parameters
     eps = 1.
     eps_end = 0.005
-    eps_decay = 0.998
+    eps_decay = 0.999  # was 0.998
 
     # And some variables to keep track of the progress
     action_dict = dict()
