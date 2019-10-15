@@ -18,8 +18,9 @@ import torch
 from flatland.envs.observations import TreeObsForRailEnv
 from flatland.envs.predictions import ShortestPathPredictorForRailEnv
 from flatland.envs.rail_env import RailEnv
-from flatland.envs.rail_generators import complex_rail_generator
-from flatland.envs.schedule_generators import complex_schedule_generator
+from flatland.envs.rail_generators import sparse_rail_generator
+from flatland.envs.schedule_generators import sparse_schedule_generator
+#from flatland.utils.rendertools import RenderTool
 
 import fc_treeobs.nets
 from fc_treeobs.dueling_double_dqn import Agent
@@ -30,7 +31,7 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv, "n:", ["n_episodes="])
     except getopt.GetoptError:
-        print('training_navigation.py -n <n_episodes>')
+        print('training_2ts.py -n <n_episodes>')
         sys.exit(2)
     for opt, arg in opts:
         if opt in ('-n', '--n_episodes'):
@@ -39,29 +40,49 @@ def main(argv):
     ## Initialize the random
     random.seed(1)
     np.random.seed(1)
+    
+    # Preload an agent
+    training = False
 
     # Initialize a random map with a random number of agents
-    x_dim = np.random.randint(8, 20)
-    y_dim = np.random.randint(8, 20)
+    x_dim = np.random.randint(20, 40)
+    y_dim = np.random.randint(20, 40)
     n_agents = np.random.randint(3, 8)
     n_goals = n_agents + np.random.randint(0, 3)
     min_dist = int(0.75 * min(x_dim, y_dim))
     tree_depth = 3
     print("main2")
-    demo = False
+    
+    # Use a the malfunction generator to break agents from time to time
+    stochastic_data = {'prop_malfunction': 0.05,  # Percentage of defective agents
+                       'malfunction_rate': 50,  # Rate of malfunction occurence
+                       'min_duration': 3,  # Minimal duration of malfunction
+                       'max_duration': 20  # Max duration of malfunction
+                       }
+
+    # Different agent types (trains) with different speeds.
+    speed_ration_map = {1.: 0.25,  # Fast passenger train
+                        1. / 2.: 0.25,  # Fast freight train
+                        1. / 3.: 0.25,  # Slow commuter train
+                        1. / 4.: 0.25}  # Slow freight train
 
     # Get an observation builder and predictor
     observation_helper = TreeObsForRailEnv(max_depth=tree_depth, predictor=ShortestPathPredictorForRailEnv())
 
     env = RailEnv(width=x_dim,
                   height=y_dim,
-                  rail_generator=complex_rail_generator(nr_start_goal=n_goals, nr_extra=5, min_dist=min_dist,
-                                                        max_dist=99999,
-                                                        seed=0),
-                  schedule_generator=complex_schedule_generator(),
-                  obs_builder_object=observation_helper,
-                  number_of_agents=n_agents)
+                  rail_generator=sparse_rail_generator(max_num_cities=3,
+                                                       # Number of cities in map (where train stations are)
+                                                       seed=1,  # Random seed
+                                                       grid_mode=False,
+                                                       max_rails_between_cities=2,
+                                                       max_rails_in_city=3),
+                  schedule_generator=sparse_schedule_generator(speed_ration_map),
+                  number_of_agents=n_agents,
+                  stochastic_data=stochastic_data,  # Malfunction data generator
+                  obs_builder_object=observation_helper)
     env.reset(True, True)
+    #env_renderer = RenderTool(env, gl="PILSVG", )
 
     handle = env.get_agent_handles()
     features_per_node = env.obs_builder.observation_dim
@@ -73,7 +94,7 @@ def main(argv):
 
     # We set the number of episodes we would like to train on
     if 'n_episodes' not in locals():
-        n_episodes = 60000
+        n_episodes = 15000
 
     # Set max number of steps per episode as well as other training relevant parameter
     max_steps = int(3 * (env.height + env.width))
@@ -94,8 +115,8 @@ def main(argv):
     agent = Agent(state_size, action_size)
 
     # Here you can pre-load an agent
-    if False:
-        with path(torch_training.Nets, "avoid_checkpoint500.pth") as file_in:
+    if training:
+        with path(fc_treeobs.nets, "avoid_checkpoint6000_round1generators.pth") as file_in:
             agent.qnetwork_local.load_state_dict(torch.load(file_in))
 
     # Do training over n_episodes
@@ -105,21 +126,25 @@ def main(argv):
         and the size of the levels every 50 episodes.
         """
         if episodes % 50 == 0:
-            x_dim = np.random.randint(8, 20)
-            y_dim = np.random.randint(8, 20)
+            x_dim = np.random.randint(20, 40)
+            y_dim = np.random.randint(20, 40)
             n_agents = np.random.randint(3, 8)
             n_goals = n_agents + np.random.randint(0, 3)
             min_dist = int(0.75 * min(x_dim, y_dim))
+
             env = RailEnv(width=x_dim,
                           height=y_dim,
-                          rail_generator=complex_rail_generator(nr_start_goal=n_goals, nr_extra=5, min_dist=min_dist,
-                                                                max_dist=99999,
-                                                                seed=0),
-                          schedule_generator=complex_schedule_generator(),
-                          obs_builder_object=TreeObsForRailEnv(max_depth=3,
-                                                               predictor=ShortestPathPredictorForRailEnv()),
-                          number_of_agents=n_agents)
-
+                          rail_generator=sparse_rail_generator(max_num_cities=3,
+                                                               # Number of cities in map (where train stations are)
+                                                               seed=1,  # Random seed
+                                                               grid_mode=False,
+                                                               max_rails_between_cities=2,
+                                                               max_rails_in_city=3),
+                          schedule_generator=sparse_schedule_generator(speed_ration_map),
+                          number_of_agents=n_agents,
+                          stochastic_data=stochastic_data,  # Malfunction data generator
+                          obs_builder_object=observation_helper)
+            
             # Adjust the parameters according to the new env.
             max_steps = int(3 * (env.height + env.width))
             agent_obs = [None] * env.get_num_agents()
@@ -127,7 +152,8 @@ def main(argv):
 
         # Reset environment
         obs, info = env.reset(True, True)
-
+        #env_renderer.reset()
+        
         # Setup placeholder for finals observation of a single agent. This is necessary because agents terminate at
         # different times during an episode
         final_obs = agent_obs.copy()
@@ -156,15 +182,15 @@ def main(argv):
 
             # Action
             for a in range(env.get_num_agents()):
-                if demo:
-                    eps = 0
                 # action = agent.act(np.array(obs[a]), eps=eps)
                 action = agent.act(agent_obs[a], eps=eps)
                 action_prob[action] += 1
                 action_dict.update({a: action})
-            # Environment step
 
+            # Environment step
             next_obs, all_rewards, done, _ = env.step(action_dict)
+            #env_renderer.render_env(show=True, show_predictions=True, show_observations=False)
+
             for a in range(env.get_num_agents()):
                 data, distance, agent_data = split_tree_into_feature_groups(next_obs[a], tree_depth)
                 data = norm_obs_clip(data)
@@ -180,7 +206,7 @@ def main(argv):
                     final_obs[a] = agent_obs[a].copy()
                     final_obs_next[a] = agent_next_obs[a].copy()
                     final_action_dict.update({a: action_dict[a]})
-                if not demo and not done[a]:
+                if not done[a]:
                     agent.step(agent_obs[a], action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
                 score += all_rewards[a] / env.get_num_agents()
 
