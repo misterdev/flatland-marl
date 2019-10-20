@@ -3,7 +3,7 @@ import random
 import sys
 from collections import deque
 
-# make sure the root path is in system path
+# make sure the root path is in system path - needed to ex with terminal
 from pathlib import Path
 base_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(base_dir))
@@ -15,10 +15,12 @@ import torch
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
+from flatland.utils.rendertools import RenderTool
 
 from cnn_globalobs.dueling_double_dqn import DQNAgent
 from cnn_globalobs.utils import preprocess_obs
 from cnn_globalobs.global_observations import CustomGlobalObsForRailEnv
+
 
 
 def main(argv):
@@ -68,9 +70,8 @@ def main(argv):
                   stochastic_data=stochastic_data,  # Malfunction data generator
                   obs_builder_object=observation_builder)
 
-    #env.reset(True, True)
-    #env_renderer = RenderTool(env, gl="PILSVG", )
-    #img = env_renderer.gl.get_image()
+    env.reset(True, True)
+    env_renderer = RenderTool(env, gl="PILSVG", )
     
     # The action space of flatland is 5 discrete actions
     action_size = 5
@@ -134,9 +135,9 @@ def main(argv):
 
             # Environment step
             next_obs, all_rewards, done, info = env.step(action_dict)
-            #env_renderer.render_env(show=True, show_predictions=False, show_observations=False)
+            env_renderer.render_env(show=True, show_predictions=False, show_observations=False)
             #img = env_renderer.gl.get_image()
-            #env_renderer.gl.save_image("ciao.png")
+            env_renderer.gl.save_image("ciao.png")
             # Update replay buffer and train agent
             for a in range(env.get_num_agents()):
                 # Only update the values when we are done or when an action was taken and thus relevant information is present

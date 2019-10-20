@@ -9,7 +9,6 @@ import numpy as np
 
 from flatland.core.env import Environment
 from flatland.core.env_observation_builder import ObservationBuilder
-
 from flatland.envs.agent_utils import RailAgentStatus, EnvAgent
 
 from cnn_globalobs.utils import convert_transitions_map
@@ -96,3 +95,23 @@ class CustomGlobalObsForRailEnv(ObservationBuilder):
                 obs_agents_state[other_agent.initial_position][4] += 1
         return self.rail_obs, obs_agents_state, obs_targets
 
+
+def RGBObsForRailEnv(ObservationBuilder):
+    """
+    This obs contains 1 img RGB in a numpy array [x, y, 3]
+    :param ObservationBuilder: 
+    :return: 
+    """
+    def __init__(self):
+        super(RGBObsForRailEnv, self).__init__()
+
+    def set_env(self, env: Environment):
+        super().set_env(env)
+
+    def reset(self):
+        pass
+
+    def get(self, handle: int = 0) -> (np.ndarray, np.ndarray, np.ndarray):
+        pass
+
+    pass
