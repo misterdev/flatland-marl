@@ -9,6 +9,13 @@ multi-agent environments.
 
 """
 
+import collections
+from typing import Optional, List, Dict, Tuple
+import queue
+import numpy as np
+from collections import defaultdict
+
+
 from flatland.core.env import Environment
 from flatland.core.env_observation_builder import ObservationBuilder
 from flatland.envs.agent_utils import RailAgentStatus, EnvAgent
@@ -19,19 +26,14 @@ from flatland.envs.rail_env import RailEnvNextAction, RailEnvActions
 from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_
 from flatland.core.grid.grid4_utils import get_new_position
 
-import collections
-from typing import Optional, List
-import queue
-
-
-import numpy as np
-
 
 class GraphObsForRailEnv(ObservationBuilder):
 
-    Node = collections.namedtuple('Node', 'node_position')
+    Node = collections.namedtuple('Node',
+                                  'node_position ' # Cell position (x, y) LO SPAZIO PRIMA DELL'APOSTROFO È IMPORTANTE!
+                                  'agent_direction') # Direction with which the agent arrived in this node
 
-    def __init__(self, bfs_depth = 2):
+    def __init__(self, bfs_depth=2):
         super(GraphObsForRailEnv, self).__init__()
         self.bfs_depth = bfs_depth
 
@@ -41,17 +43,22 @@ class GraphObsForRailEnv(ObservationBuilder):
     def reset(self):
         pass
 
-    def get_many(self, handles: Optional[List[int]] = None) -> Node:
-        return True
-    
+    def get_many(self, handles: Optional[List[int]] = None) -> {}:
+        observations = {}
+
+        for a in handles:
+            observations[a] = self.get(a)
+        return observations
+
     # Return a graph (dict) of nodes, where nodes are identified by ids, graph is directed, depends on agent direction
     # (that are tuples that represent the cell position)
     # Decide graph depth to use bfs
     def get(self, handle: int = 0) -> {}:
-
-        obs_graph = {}
-        visited_nodes = {}
-        agent = self.env_agents[handle]
+        obs_graph = defaultdict(list) # dict
+        visited_nodes = set() # set
+        bfs_queue = [] # 3 like forward, right, left, max of 3 nodes at one level 
+        
+        agent = self.env.agents[handle]
         if agent.status == RailAgentStatus.READY_TO_DEPART:
             agent_virtual_position = agent.initial_position
         elif agent.status == RailAgentStatus.ACTIVE:
@@ -60,43 +67,46 @@ class GraphObsForRailEnv(ObservationBuilder):
             agent_virtual_position = agent.target
         else:
             return None
-        
-        distance_map = self.env.distance_map
-        agent_curr_dir = agent.direction
-        
+
+        agent_current_direction = agent.direction
+
         # Push root node into the queue
-        bfs_queue = queue.Queue(maxsize=3) # 3 like forward, right, left, max of 3 nodes at one level 
-        root_node_obs = GraphObsForRailEnv.Node(node_position=agent_virtual_position)
-        
-        bfs_queue.put(root_node_obs) # TODO serve anche la dir probably
+        root_node_obs = GraphObsForRailEnv.Node(node_position=agent_virtual_position,
+                                                agent_direction=agent_current_direction)
+        bfs_queue.append(root_node_obs)
 
         # Perform BFS of depth bfs_depth
-        for i in range(1, self.bfs_depth):
-            while not bfs_queue.empty():
-                current_node = bfs_queue.get()
-                agent_position = current_node # tmp: now it stores only pos as tuple
-                possible_transitions = self.env.rail.get_transitions(*agent_position, agent_curr_dir)
-                num_transitions = np.count_nonzero(possible_transitions)
+        for i in range(1, self.bfs_depth + 1):
+            while not len(bfs_queue) == 0:
+                tmp_queue = []
+                current_node = bfs_queue.pop(0)
+                agent_position = current_node[0]
+                agent_current_direction = current_node[1]
+                # Get cell transitions given agent direction
+                possible_transitions = self.env.rail.get_transitions(*agent_position, agent_current_direction)
 
-                orientation = agent.direction
-                # If there's only one possible transition just pick that
-                if num_transitions == 1:
-                    orientation = np.argmax(possible_transitions)
-
-                for i, branch_direction in enumerate([(orientation + i) % 4 for i in range(-1, 3)]):
+                orientation = agent_current_direction
+                possible_branch_directions = []
+                # Build list of possible branching directions from cell
+                for j, branch_direction in enumerate([(orientation + j) % 4 for j in range(-1, 3)]):
                     if possible_transitions[branch_direction]:
-                        new_cell = get_new_position(agent_virtual_position, branch_direction)
-                        adj_node = self._explore_path(handle, new_cell, branch_direction, 1, 1)
-                        bfs_queue.put(adj_node)
-                        obs_graph[current_node] = adj_node
-            
-            # left, forward, right
-                        
+                        possible_branch_directions.append(branch_direction)
+                for branch_direction in possible_branch_directions:
+                    neighbour_cell = get_new_position(agent_position, branch_direction)
+                    adj_node = self._explore_path(handle, neighbour_cell, branch_direction)
+                    if not (*adj_node[0], adj_node[1]) in visited_nodes:
+                        obs_graph[agent_position].append(adj_node)
+                        visited_nodes.add((*adj_node[0], adj_node[1]))
+                        tmp_queue.append(adj_node)
+            # Add all the nodes of the next level to the BFS queue
+            for el in tmp_queue:
+                bfs_queue.append(el)
+                
         return obs_graph
+    
+    # Find next branching point
+    def _explore_path(self, handle, position, direction):
 
-    def _explore_path(self, handle, position, direction, depth):
-        if depth > self.bfs_depth:
-            return [], []
         # Continue along direction until next switch or
         # until no transitions are possible along the current direction (i.e., dead-ends)
         # We treat dead-ends as nodes, instead of going back, to avoid loops
@@ -105,16 +115,16 @@ class GraphObsForRailEnv(ObservationBuilder):
         last_is_switch = False
         last_is_dead_end = False
         last_is_terminal = False  # wrong cell or cycle
-        last_is_target = False # target was reached
+        last_is_target = False  # target was reached
         agent = self.env.agents[handle]
         visited = OrderedSet()
         
-        while exploring:
+        while True:
 
             if (position[0], position[1], direction) in visited:
                 last_is_terminal = True
                 break
-            visited.add((position[0], position[1], direction))
+            visited.add((position[0], position[1], direction)) # how to update pos e dir
 
             # If the target node is encountered, pick that as node. Also, no further branching is possible.
             if np.array_equal(position, self.env.agents[handle].target):
@@ -130,15 +140,15 @@ class GraphObsForRailEnv(ObservationBuilder):
                 # Check if dead-end (1111111111111111), or if we can go forward along direction
                 if total_transitions == 1:
                     last_is_dead_end = True
+                    break
 
                 if not last_is_dead_end:
                     # Keep walking through the tree along `direction`
-                    exploring = True
                     # convert one-hot encoding to 0,1,2,3
                     direction = np.argmax(cell_transitions)
                     position = get_new_position(position, direction)
-
-            elif num_transitions > 0:
+            
+            elif num_transitions > 1:
                 last_is_switch = True
                 break
 
@@ -150,8 +160,7 @@ class GraphObsForRailEnv(ObservationBuilder):
                 break
         # Out of while loop - a branching point was found
         # TODO tmp build node features and save them here
-        node = position
+        node = GraphObsForRailEnv.Node(node_position=position,
+                                       agent_direction=direction) # TODO
 
         return node
-
-# TODO follow only valid paths, not all of them
