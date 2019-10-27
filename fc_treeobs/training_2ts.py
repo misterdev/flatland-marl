@@ -51,11 +51,10 @@ def main(argv):
     n_goals = n_agents + np.random.randint(0, 3)
     min_dist = int(0.75 * min(x_dim, y_dim))
     tree_depth = 3
-    print("main2")
     
     # Use a the malfunction generator to break agents from time to time
     stochastic_data = {'prop_malfunction': 0.05,  # Percentage of defective agents
-                       'malfunction_rate': 50,  # Rate of malfunction occurence
+                       'malfunction_rate': 50,  # Rate of malfunction occurrence
                        'min_duration': 3,  # Minimal duration of malfunction
                        'max_duration': 20  # Max duration of malfunction
                        }
@@ -190,7 +189,8 @@ def main(argv):
             # Environment step
             next_obs, all_rewards, done, _ = env.step(action_dict)
             #env_renderer.render_env(show=True, show_predictions=True, show_observations=False)
-
+            
+            # Normalize observations
             for a in range(env.get_num_agents()):
                 data, distance, agent_data = split_tree_into_feature_groups(next_obs[a], tree_depth)
                 data = norm_obs_clip(data)
@@ -216,6 +216,7 @@ def main(argv):
                 for a in range(env.get_num_agents()):
                     agent.step(final_obs[a], final_action_dict[a], all_rewards[a], final_obs_next[a], done[a])
                 break
+                
         # Epsilon decay
         eps = max(eps_end, eps_decay * eps)  # decrease epsilon
 
@@ -223,7 +224,8 @@ def main(argv):
         scores_window.append(score / max_steps)  # save most recent score
         scores.append(np.mean(scores_window))
         dones_list.append((np.mean(done_window)))
-
+        
+        # Print training results info
         print(
             '\rTraining {} Agents on ({},{}).\t Episode {}\t Average Score: {:.3f}\tDones: {:.2f}%\tEpsilon: {:.2f} \t Action Probabilities: \t {}'.format(
                 env.get_num_agents(), x_dim, y_dim,
