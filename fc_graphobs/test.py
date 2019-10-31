@@ -59,7 +59,7 @@ stochastic_data = {'prop_malfunction': 0.3,  # Percentage of defective agents
                    }
 
 
-observation_builder = GraphObsForRailEnv(bfs_depth=4)
+observation_builder = GraphObsForRailEnv(bfs_depth=3)
 
 # Construct the environment with the given observation, generators, predictors, and stochastic data
 env = RailEnv(width=width,
@@ -115,7 +115,7 @@ for step in range(100):
 
     next_obs, all_rewards, done, _ = env.step(action_dict)
 
-    env_renderer.render_env(show=True, show_observations=False, show_predictions=False)
+    env_renderer.render_env(show=True, show_observations=True, show_predictions=False)
     frame_step += 1
     # Update replay buffer and train agent
     for a in range(env.get_num_agents()):
