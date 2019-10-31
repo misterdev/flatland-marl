@@ -8,6 +8,7 @@ from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 
 from fc_graphobs.graph_observations import GraphObsForRailEnv
 
+
 class RandomAgent:
 
     def __init__(self, state_size, action_size):
@@ -28,11 +29,12 @@ class RandomAgent:
         # Load a policy
         return
 
+
 width = 40
 height = 40
 nr_trains = 3  # Number of trains that have an assigned task in the env
 cities_in_map = 2  # Number of cities where agents can start or end
-seed = 1  # Random seed
+seed = 2  # Random seed
 grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
 max_rails_between_cities = 2  # Max number of tracks allowed between cities. This is number of entry point to a city
 max_rail_in_cities = 3  # Max number of parallel tracks within a city, representing a realistic train station
@@ -76,7 +78,7 @@ env.reset()
 # Initiate the renderer
 env_renderer = RenderTool(env, gl="PILSVG",
                           agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS_AND_BOX,
-                          show_debug=False,
+                          show_debug=True,
                           screen_height=1080,  # Adjust these parameters to fit your resolution
                           screen_width=1920)  # Adjust these parameters to fit your resolution
 
@@ -93,21 +95,16 @@ print("\n The following agents can register an action:")
 print("========================================")
 for info in information['action_required']:
     print("Agent {} needs to submit an action.".format(info))
-    
 env_renderer.reset()
-
-# Here you can also further enhance the provided observation by means of normalization
-# See training navigation example in the baseline repository
-
 
 score = 0
 # Run episode
 frame_step = 0
 
-for step in range(100):
+for step in range(10):
     # Chose an action for each agent in the environment
     for a in range(env.get_num_agents()):
-        action = controller.act(observations[a]) # ret sempre 2
+        action = controller.act(observations[a])  # always returns 2
         action_dict.update({a: action})
 
     # Environment step which returns the observations for all agents, their corresponding
@@ -115,7 +112,7 @@ for step in range(100):
 
     next_obs, all_rewards, done, _ = env.step(action_dict)
 
-    env_renderer.render_env(show=True, show_observations=True, show_predictions=False)
+    env_renderer.render_env(show=True, show_observations=False, show_predictions=False)
     frame_step += 1
     # Update replay buffer and train agent
     for a in range(env.get_num_agents()):

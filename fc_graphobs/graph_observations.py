@@ -88,6 +88,11 @@ class GraphObsForRailEnv(ObservationBuilder):
             while not len(bfs_queue) == 0:
                 current_node = bfs_queue.pop(0)
                 agent_position = current_node[0]
+
+                # Init node in the obs_graph (if first time)
+                if not agent_position in obs_graph.keys():
+                    obs_graph[agent_position] = []
+
                 agent_current_direction = current_node[1]
                 # Get cell transitions given agent direction
                 possible_transitions = self.env.rail.get_transitions(*agent_position, agent_current_direction)
@@ -110,18 +115,17 @@ class GraphObsForRailEnv(ObservationBuilder):
             # Add all the nodes of the next level to the BFS queue
             for el in tmp_queue:
                 bfs_queue.append(el)
-            # At the last pass add adj nodes to the obs graph wih empty lists
-            if i == self.bfs_depth:
-                for el in bfs_queue:
-                    if not el[0] in obs_graph.keys():
-                        obs_graph[el[0]] = []
 
-
+        # After the last pass add adj nodes to the obs graph wih empty lists
+        for el in bfs_queue:
+            if not el[0] in obs_graph.keys():
+                obs_graph[el[0]] = []
+                #visited_nodes.add((*el[0], el[1]))
         # For obs rendering
-        # self.env.dev_obs_dict[handle] = [(node[0], node[1]) for node in visited_nodes]
+        #self.env.dev_obs_dict[handle] = [(node[0], node[1]) for node in visited_nodes]
 
         # Build graph with graph-tool library for visualization
-        g = build_graph(obs_graph)
+        g = build_graph(obs_graph, handle)
 
         return obs_graph
 
