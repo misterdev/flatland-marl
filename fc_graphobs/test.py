@@ -7,6 +7,7 @@ from flatland.envs.schedule_generators import sparse_schedule_generator
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 
 from fc_graphobs.graph_observations import GraphObsForRailEnv
+from fc_graphobs.predictions import ShortestPathPredictorForRailEnv
 
 
 class RandomAgent:
@@ -34,7 +35,7 @@ width = 40
 height = 40
 nr_trains = 3  # Number of trains that have an assigned task in the env
 cities_in_map = 2  # Number of cities where agents can start or end
-seed = 2  # Random seed
+seed = 1  # Random seed
 grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
 max_rails_between_cities = 2  # Max number of tracks allowed between cities. This is number of entry point to a city
 max_rail_in_cities = 3  # Max number of parallel tracks within a city, representing a realistic train station
@@ -60,8 +61,8 @@ stochastic_data = {'prop_malfunction': 0.3,  # Percentage of defective agents
                    'max_duration': 20  # Max duration of malfunction
                    }
 
-
-observation_builder = GraphObsForRailEnv(bfs_depth=3)
+# TODO Shortest path example with looking 10 ts in advance
+observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=10))
 
 # Construct the environment with the given observation, generators, predictors, and stochastic data
 env = RailEnv(width=width,
@@ -101,7 +102,7 @@ score = 0
 # Run episode
 frame_step = 0
 
-for step in range(10):
+for step in range(50):
     # Chose an action for each agent in the environment
     for a in range(env.get_num_agents()):
         action = controller.act(observations[a])  # always returns 2

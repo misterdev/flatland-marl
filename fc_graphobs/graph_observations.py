@@ -25,22 +25,27 @@ from flatland.envs.distance_map import DistanceMap
 from flatland.envs.rail_env import RailEnvNextAction, RailEnvActions
 from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_
 from flatland.core.grid.grid4_utils import get_new_position
+
 from fc_graphobs.draw_obs_graph import build_graph
 
 
 class GraphObsForRailEnv(ObservationBuilder):
 
     Node = collections.namedtuple('Node',
-                                  'cell_position ' # Cell position (x, y)
-                                  'agent_direction ' # Direction with which the agent arrived in this node
-                                  'is_target') # whether agent's target is in this cell
+                                  'cell_position '  # Cell position (x, y)
+                                  'agent_direction '  # Direction with which the agent arrived in this node
+                                  'is_target')  # whether agent's target is in this cell
 
-    def __init__(self, bfs_depth=2):
+    def __init__(self, bfs_depth, predictor):
         super(GraphObsForRailEnv, self).__init__()
         self.bfs_depth = bfs_depth
+        self.predictor = predictor
 
-    def set_env(selfself, env: Environment):
+    def set_env(self, env: Environment):
         super().set_env(env)
+        if self.predictor:
+            # Use set_env available in PredictionBuilder (parent class)
+            self.predictor.set_env(self.env)
 
     def reset(self):
         pass
@@ -126,8 +131,24 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         # Build graph with graph-tool library for visualization
         g = build_graph(obs_graph, handle)
+        
+        # TODO Experiment with predictor here, retrieve prediction for all the agents
+        prediction_dict = self.predictor.get()
+        cells_sequence = self.predictor.compute_cells_sequence(prediction_dict)
+        print(self.possible_conflict(cells_sequence1=cells_sequence[0], cells_sequence2=cells_sequence[1]))
+        
+        # TODO Debug
+        # Visualize paths that are overlapping (use graph tool?) or print to file
+        for a in self.env.agents:
+            print(str(a.handle) + ": ", end='')
+            for cell in cells_sequence[a.handle]:
+                print(str(cell) + " ", end='')
+            print()
 
-        return obs_graph
+        #return obs_graph
+        
+        # TODO For the moment: computes the obs_graph (dunno what to do with it exactly) but return the next_cell obs
+        #  relative to the shortest predictor to be used
 
     # Find next branching point
     def _explore_path(self, handle, position, direction):
@@ -143,7 +164,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         last_is_target = False  # target was reached
         agent = self.env.agents[handle]
         visited = OrderedSet()
-        
+
         while True:
 
             if (position[0], position[1], direction) in visited:
@@ -172,7 +193,7 @@ class GraphObsForRailEnv(ObservationBuilder):
                     # convert one-hot encoding to 0,1,2,3
                     direction = np.argmax(cell_transitions)
                     position = get_new_position(position, direction)
-            
+
             elif num_transitions > 1:
                 last_is_switch = True
                 break
@@ -190,3 +211,17 @@ class GraphObsForRailEnv(ObservationBuilder):
                                        is_target=last_is_target) # TODO
 
         return node
+    
+    '''
+    Function that given predicted cells sequence for two different agents (as list of tuples)
+    predicts a possible conflict.
+    TODO Generalize to multiple agents later
+    '''
+    def possible_conflict(self, cells_sequence1, cells_sequence2):
+
+        prediction_depth = len(cells_sequence1)
+        for ts in range(1, prediction_depth-1):
+            cell_pos = cells_sequence1[ts]
+            if cell_pos == cells_sequence2[ts] or cell_pos == cells_sequence2[ts-1] or cell_pos == cells_sequence2[ts+1]:
+                return True
+        return False
