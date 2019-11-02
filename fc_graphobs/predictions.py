@@ -126,3 +126,5 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
         return cells_sequence
 
+    def get_prediction_depth(self):
+        return self.max_depth

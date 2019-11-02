@@ -34,12 +34,14 @@ class GraphObsForRailEnv(ObservationBuilder):
     Node = collections.namedtuple('Node',
                                   'cell_position '  # Cell position (x, y)
                                   'agent_direction '  # Direction with which the agent arrived in this node
-                                  'is_target')  # whether agent's target is in this cell
+                                  'is_target')  # Whether agent's target is in this cell
 
     def __init__(self, bfs_depth, predictor):
         super(GraphObsForRailEnv, self).__init__()
         self.bfs_depth = bfs_depth
         self.predictor = predictor
+        self.prediction_dict = {}
+
 
     def set_env(self, env: Environment):
         super().set_env(env)
@@ -52,6 +54,7 @@ class GraphObsForRailEnv(ObservationBuilder):
 
     def get_many(self, handles: Optional[List[int]] = None) -> {}:
         observations = {}
+        self.prediction_dict = self.predictor.get()
 
         for a in handles:
             observations[a] = self.get(a)
@@ -62,6 +65,28 @@ class GraphObsForRailEnv(ObservationBuilder):
     (that are tuples that represent the cell position, eg (11, 23))
     '''
     def get(self, handle: int = 0) -> {}:
+
+        bfs_graph = self._bfs_graph(handle)
+        # TODO For the moment: computes the obs_graph (dunno what to do with it exactly) but return the next_cell obs
+        prediction_dict = self.predictor.get()
+        cells_sequence = self.predictor.compute_cells_sequence(prediction_dict)
+
+        # Debug
+        # Visualize paths that are overlapping (use graph tool?) or print to file
+        for a in self.env.agents:
+            print(str(a.handle) + ": ", end='')
+            for cell in cells_sequence[a.handle]:
+                print(str(cell) + " ", end='')
+            print()
+
+        occupancy_dict = {}
+        for a in self.env.agents:
+            occupancy_dict[a.handle] = self._fill_occupancy(a.handle)
+
+        # TODO This should return the tot cells sequence to use as state to feed into the network
+        return bfs_graph
+
+    def _bfs_graph(self, handle: int = 0) -> {}:
         obs_graph = defaultdict(list)  # dict
         visited_nodes = set()  # set
         bfs_queue = []
@@ -125,30 +150,15 @@ class GraphObsForRailEnv(ObservationBuilder):
         for el in bfs_queue:
             if not el[0] in obs_graph.keys():
                 obs_graph[el[0]] = []
-                #visited_nodes.add((*el[0], el[1]))
+                # visited_nodes.add((*el[0], el[1]))
         # For obs rendering
-        #self.env.dev_obs_dict[handle] = [(node[0], node[1]) for node in visited_nodes]
+        # self.env.dev_obs_dict[handle] = [(node[0], node[1]) for node in visited_nodes]
 
         # Build graph with graph-tool library for visualization
         g = build_graph(obs_graph, handle)
-        
-        # TODO Experiment with predictor here, retrieve prediction for all the agents
-        prediction_dict = self.predictor.get()
-        cells_sequence = self.predictor.compute_cells_sequence(prediction_dict)
-        print(self.possible_conflict(cells_sequence1=cells_sequence[0], cells_sequence2=cells_sequence[1]))
-        
-        # TODO Debug
-        # Visualize paths that are overlapping (use graph tool?) or print to file
-        for a in self.env.agents:
-            print(str(a.handle) + ": ", end='')
-            for cell in cells_sequence[a.handle]:
-                print(str(cell) + " ", end='')
-            print()
 
-        #return obs_graph
-        
-        # TODO For the moment: computes the obs_graph (dunno what to do with it exactly) but return the next_cell obs
-        #  relative to the shortest predictor to be used
+
+        return obs_graph
 
     # Find next branching point
     def _explore_path(self, handle, position, direction):
@@ -211,17 +221,43 @@ class GraphObsForRailEnv(ObservationBuilder):
                                        is_target=last_is_target) # TODO
 
         return node
-    
-    '''
-    Function that given predicted cells sequence for two different agents (as list of tuples)
-    predicts a possible conflict.
-    TODO Generalize to multiple agents later
-    '''
-    def possible_conflict(self, cells_sequence1, cells_sequence2):
 
-        prediction_depth = len(cells_sequence1)
-        for ts in range(1, prediction_depth-1):
-            cell_pos = cells_sequence1[ts]
-            if cell_pos == cells_sequence2[ts] or cell_pos == cells_sequence2[ts-1] or cell_pos == cells_sequence2[ts+1]:
-                return True
-        return False
+    # TODO Generalize to multiple agents later and also definition of possible conflict must be improved
+    # Should consider a span of conflicts, not just one
+    '''
+    Function that given predicted cells sequence for two different agents (as list of tuples) and a specific time step
+    returns 1 if a possible conflict is predicted at that ts.
+    ts must be < prediction_depth - 1 e > 0
+    '''
+    def _possible_conflict(self, sequence, possible_overlapping_sequence, ts):
+
+            cell_pos = sequence[ts]
+            if cell_pos == possible_overlapping_sequence[ts] or cell_pos == possible_overlapping_sequence[ts-1] or cell_pos == possible_overlapping_sequence[ts+1]:
+                return 1
+            return 0
+
+    '''
+    Returns one-hot encoding of 
+    0: no other agent in this cell at this ts
+    1: (probably) other agents here at the same ts, so conflict (for now, check with any other agent, but we could use several "layers")
+    NOW RETURNS THE SUM 
+    Update using idea of branch and direction
+    '''
+    def _fill_occupancy(self, handle):
+        agents = self.env.agents
+        agent = agents[handle]
+        other_agents = []
+        for a in agents:
+            if not a == agent:
+                other_agents.append(a)
+
+        prediction_depth = self.predictor.get_prediction_depth()
+        occupancy = np.zeros(prediction_depth)
+        cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
+        agent_sequence = cells_sequence[handle]
+        for a in other_agents:
+            possible_overlapping_sequence = cells_sequence[a.handle]
+            for ts in range(1, prediction_depth - 1):  # TODO Check if it works of first and last ts
+                occupancy[ts] += self._possible_conflict(agent_sequence, possible_overlapping_sequence, ts)
+
+        return occupancy
