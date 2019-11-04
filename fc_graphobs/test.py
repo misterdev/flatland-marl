@@ -47,7 +47,7 @@ rail_generator = sparse_rail_generator(max_num_cities=cities_in_map,
                                        max_rails_between_cities=max_rails_between_cities,
                                        max_rails_in_city=max_rail_in_cities,
                                        )
-
+# Maps speeds to % of appearance in the env TODO Find reasonable values
 speed_ration_map = {1.: 0.25,  # Fast passenger train
                     1. / 2.: 0.25,  # Fast freight train
                     1. / 3.: 0.25,  # Slow commuter train
@@ -61,7 +61,6 @@ stochastic_data = {'prop_malfunction': 0.3,  # Percentage of defective agents
                    'max_duration': 20  # Max duration of malfunction
                    }
 
-# TODO Shortest path example with looking 10 ts in advance
 observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=10))
 
 # Construct the environment with the given observation, generators, predictors, and stochastic data

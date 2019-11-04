@@ -2,7 +2,7 @@
 ObservationBuilder objects are objects that can be passed to environments designed for customizability.
 The ObservationBuilder-derived custom classes implement 2 functions, reset() and get() or get(handle).
 
-+ `reset()` is called after each environment reset, to allow for pre-computing relevant data.
++ `reset()` is called after each environment reset (i.e. at the beginning of a new episode), to allow for pre-computing relevant data.
 
 + `get()` is called whenever an observation has to be computed, potentially for each agent independently in case of \
 multi-agent environments.
@@ -27,6 +27,7 @@ from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_
 from flatland.core.grid.grid4_utils import get_new_position
 
 from fc_graphobs.draw_obs_graph import build_graph
+from fc_graphobs.utils import assign_random_priority, assign_speed_priority
 
 
 class GraphObsForRailEnv(ObservationBuilder):
@@ -66,25 +67,43 @@ class GraphObsForRailEnv(ObservationBuilder):
     '''
     def get(self, handle: int = 0) -> {}:
 
+        # TODO For the moment: computes the obs_graph (must be used for search - dunno what to do with it exactly)
+        cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
+        prediction_depth = len(cells_sequence[0])
         bfs_graph = self._bfs_graph(handle)
-        # TODO For the moment: computes the obs_graph (dunno what to do with it exactly) but return the next_cell obs
-        prediction_dict = self.predictor.get()
-        cells_sequence = self.predictor.compute_cells_sequence(prediction_dict)
-
+        agents = self.env.agents
         # Debug
         # Visualize paths that are overlapping (use graph tool?) or print to file
-        for a in self.env.agents:
+        for a in agents:
             print(str(a.handle) + ": ", end='')
             for cell in cells_sequence[a.handle]:
                 print(str(cell) + " ", end='')
             print()
+        # Occupancy obs
+        occupancy = self._fill_occupancy(handle)
+        # Priority obs
+        priority = 0.
+        # An agent that is malfunctioning has no priority
+        if agents[handle].malfunction_data['malfunction'] == 0:
+            priority = agents[handle].speed_data['speed']
+        # TODO We may need some normalization depending on the type of data that the part of obs represents
 
-        occupancy_dict = {}
-        for a in self.env.agents:
-            occupancy_dict[a.handle] = self._fill_occupancy(a.handle)
+        # Malfunctioning obs: malfunction, malfunction_rate, next_malfunction, nr_malfunctions
+        # Counting number of agents that are currently malfunctioning (globally) - experimental
+        n_agents_malfunctioning = 0
+        for a in agents:
+            if a.malfunction_data['malfunction'] != 0:
+                n_agents_malfunctioning += 1  # Considering ALL agents
 
-        # TODO This should return the tot cells sequence to use as state to feed into the network
-        return bfs_graph
+        # Agents status (agents ready to depart) - it tells the agent how many will appear - encountered? or globally?
+        n_agents_ready_to_depart = 0
+        for a in agents:
+            if a.status in [RailAgentStatus.READY_TO_DEPART]:
+                n_agents_ready_to_depart += 1  # Considering ALL agents
+        # shape (prediction_depth + 3, )
+        agent_obs = np.append(occupancy, (priority, n_agents_malfunctioning, n_agents_ready_to_depart))
+        # With this obs the agent actually decided only if it has to move or stop
+        return agent_obs
 
     def _bfs_graph(self, handle: int = 0) -> {}:
         obs_graph = defaultdict(list)  # dict
@@ -222,12 +241,11 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         return node
 
-    # TODO Generalize to multiple agents later and also definition of possible conflict must be improved
-    # Should consider a span of conflicts, not just one
+    # TODO Improve notion of conflict, should consider also agent direction and branch (see TreeObs)
     '''
     Function that given predicted cells sequence for two different agents (as list of tuples) and a specific time step
     returns 1 if a possible conflict is predicted at that ts.
-    ts must be < prediction_depth - 1 e > 0
+    Precondition: 0 < ts < prediction_depth - 1
     '''
     def _possible_conflict(self, sequence, possible_overlapping_sequence, ts):
 
@@ -237,11 +255,9 @@ class GraphObsForRailEnv(ObservationBuilder):
             return 0
 
     '''
-    Returns one-hot encoding of 
+    Returns one-hot encoding of agent occupancy as an array where each element is
     0: no other agent in this cell at this ts
-    1: (probably) other agents here at the same ts, so conflict (for now, check with any other agent, but we could use several "layers")
-    NOW RETURNS THE SUM 
-    Update using idea of branch and direction
+    >= 1: (probably) other agents here at the same ts, so conflict, e.g. if 1 => one possible conflict, 2 => 2 possible conflicts, etc.
     '''
     def _fill_occupancy(self, handle):
         agents = self.env.agents
@@ -257,7 +273,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         agent_sequence = cells_sequence[handle]
         for a in other_agents:
             possible_overlapping_sequence = cells_sequence[a.handle]
-            for ts in range(1, prediction_depth - 1):  # TODO Check if it works of first and last ts
+            for ts in range(1, prediction_depth - 1):  # TODO Check if it works at first and last ts
                 occupancy[ts] += self._possible_conflict(agent_sequence, possible_overlapping_sequence, ts)
 
         return occupancy
