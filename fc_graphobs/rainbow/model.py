@@ -22,7 +22,7 @@ class NoisyLinear(nn.Module):
         self.register_buffer('bias_epsilon', torch.empty(out_features))
         self.reset_parameters()
         self.reset_noise()
-    
+
     def reset_parameters(self):
         mu_range = 1 / math.sqrt(self.in_features)
         self.weight_mu.data.uniform_(-mu_range, mu_range)
@@ -47,6 +47,7 @@ class NoisyLinear(nn.Module):
           return F.linear(input, self.weight_mu, self.bias_mu)
 
 
+# TODO Check hidsizes and pass them as params
 class DQN(nn.Module):
     def __init__(self, args, state_size, action_space, hidsize1=128, hidsize2=128):
         super(DQN, self).__init__()
@@ -59,8 +60,9 @@ class DQN(nn.Module):
         self.fc1_adv = nn.Linear(state_size, hidsize1)
         self.fc2_adv = nn.Linear(hidsize1, hidsize2)
         self.fc3_adv = nn.Linear(hidsize2, action_space)
-
-        self.fc_v = nn.Linear(state_size, hidsize1) # Not sure about initial layers, the original architecture uses conv layers
+        # Not sure about initial layers, the original architecture uses conv layers
+        # Need to choose the shared encoder
+        self.fc_v = nn.Linear(state_size, hidsize1)
         self.fc_a = nn.Linear(state_size, hidsize2)
         self.fc_h_v = NoisyLinear(hidsize1, args.hidden_size, std_init=args.noisy_std)
         self.fc_h_a = NoisyLinear(hidsize1, args.hidden_size, std_init=args.noisy_std)
