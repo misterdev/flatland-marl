@@ -112,7 +112,7 @@ def split_tree_into_feature_groups(tree: TreeObsForRailEnv.Node, max_tree_depth:
 
     return data, distance, agent_data
 
-
+# TODO tweak this obs radius?
 def normalize_observation(observation: TreeObsForRailEnv.Node, tree_depth: int, observation_radius=0):
     """
     This function normalizes the observation used by the RL algorithm

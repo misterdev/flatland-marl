@@ -54,7 +54,7 @@ def main(argv):
 
     # Use a the malfunction generator to break agents from time to time
     stochastic_data = {'prop_malfunction': 0.0,  # Percentage of defective agents
-                       'malfunction_rate': 0,  # Rate of malfunction occurence
+                       'malfunction_rate': 0,  # Rate of malfunction occurrence
                        'min_duration': 0,  # Minimal duration of malfunction
                        'max_duration': 0  # Max duration of malfunction
                        }
