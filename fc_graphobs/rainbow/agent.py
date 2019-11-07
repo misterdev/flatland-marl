@@ -10,7 +10,9 @@ from fc_graphobs.rainbow.model import DQN
 
 class RainbowAgent():
     def __init__(self, args, env):
-        self.action_space = env.action_space()
+        #self.action_space = env.action_space()
+        self.action_space = 2  # TODO Parameterize
+        self.state_size = args.state_size
         self.atoms = args.atoms
         self.Vmin = args.V_min
         self.Vmax = args.V_max
@@ -20,7 +22,7 @@ class RainbowAgent():
         self.n = args.multi_step
         self.discount = args.discount
 
-        self.online_net = DQN(args, self.action_space).to(device=args.device)
+        self.online_net = DQN(args, self.state_size, self.action_space).to(device=args.device)
         if args.model:  # Load pretrained model if provided
             if os.path.isfile(args.model):
                 state_dict = torch.load(args.model, map_location='cpu')  # Always load tensors onto CPU by default, will shift to GPU if necessary
@@ -35,7 +37,7 @@ class RainbowAgent():
 
         self.online_net.train()
 
-        self.target_net = DQN(args, self.action_space).to(device=args.device)
+        self.target_net = DQN(args, self.state_size, self.action_space).to(device=args.device)
         self.update_target_net()
         self.target_net.train()
         for param in self.target_net.parameters():

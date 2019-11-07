@@ -25,6 +25,7 @@ from flatland.envs.distance_map import DistanceMap
 from flatland.envs.rail_env import RailEnvNextAction, RailEnvActions
 from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_
 from flatland.core.grid.grid4_utils import get_new_position
+from flatland.core.grid.grid_utils import coordinate_to_position
 
 from fc_graphobs.draw_obs_graph import build_graph
 from fc_graphobs.utils import assign_random_priority, assign_speed_priority
@@ -44,6 +45,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         self.prediction_dict = {}
 
 
+
     def set_env(self, env: Environment):
         super().set_env(env)
         if self.predictor:
@@ -56,6 +58,25 @@ class GraphObsForRailEnv(ObservationBuilder):
     def get_many(self, handles: Optional[List[int]] = None) -> {}:
         observations = {}
         self.prediction_dict = self.predictor.get()
+        if self.predictor:
+            # TODO Qua nel mezzo c'è roba che non serve
+            self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
+            self.max_prediction_depth = 0
+            self.predicted_pos = {}
+            self.predicted_dir = {}
+            self.predictions = self.predictor.get()
+            if self.predictions:
+                for t in range(self.predictor.max_depth + 1):
+                    pos_list = []
+                    dir_list = []
+                    for a in handles:
+                        if self.predictions[a] is None:
+                            continue
+                        pos_list.append(self.predictions[a][t][1:3])
+                        dir_list.append(self.predictions[a][t][3])
+                    self.predicted_pos.update({t: coordinate_to_position(self.env.width, pos_list)})
+                    self.predicted_dir.update({t: dir_list})
+                self.max_prediction_depth = len(self.predicted_pos)
 
         for a in handles:
             observations[a] = self.get(a)
@@ -68,17 +89,18 @@ class GraphObsForRailEnv(ObservationBuilder):
     def get(self, handle: int = 0) -> {}:
 
         # TODO For the moment: computes the obs_graph (must be used for search - dunno what to do with it exactly)
-        cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
-        prediction_depth = len(cells_sequence[0])
+        prediction_depth = len(self.cells_sequence[0])
         bfs_graph = self._bfs_graph(handle)
         agents = self.env.agents
         # Debug
         # Visualize paths that are overlapping (use graph tool?) or print to file
+        '''
         for a in agents:
             print(str(a.handle) + ": ", end='')
             for cell in cells_sequence[a.handle]:
                 print(str(cell) + " ", end='')
             print()
+        '''
         # Occupancy obs
         occupancy = self._fill_occupancy(handle)
         # Priority obs
@@ -102,8 +124,26 @@ class GraphObsForRailEnv(ObservationBuilder):
                 n_agents_ready_to_depart += 1  # Considering ALL agents
         # shape (prediction_depth + 3, )
         agent_obs = np.append(occupancy, (priority, n_agents_malfunctioning, n_agents_ready_to_depart))
+        
+        shortest_path_action = 2 # TODO Compute next action according to chosen path (need only the first, not the sequence)
         # With this obs the agent actually decided only if it has to move or stop
         return agent_obs
+        #return agent_obs, shortest_path_action
+
+    def get_shortest_path_action(self, handle):
+
+        agent = self.env.agents[handle]
+        if agent.status == RailAgentStatus.READY_TO_DEPART:
+            action = RailEnvActions.MOVE_FORWARD
+        elif agent.status == RailAgentStatus.ACTIVE:
+            shortest_paths = self.predictor.get_shortest_paths()
+            step = shortest_paths[handle][0]
+            action = step[2][0]  # Get next_action_element
+        else: # If status == DONE
+            action = RailEnvActions.DO_NOTHING
+
+        return action
+
 
     def _bfs_graph(self, handle: int = 0) -> {}:
         obs_graph = defaultdict(list)  # dict
@@ -174,8 +214,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         # self.env.dev_obs_dict[handle] = [(node[0], node[1]) for node in visited_nodes]
 
         # Build graph with graph-tool library for visualization
-        g = build_graph(obs_graph, handle)
-
+        # g = build_graph(obs_graph, handle)  # TODO Uncomment
 
         return obs_graph
 

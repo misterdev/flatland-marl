@@ -11,7 +11,7 @@ import torch
 from tqdm import trange
 
 from flatland.envs.rail_env import RailEnv
-from flatland.envs.rail_generators import sparse_rail_generator, complex_rail_generator
+from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
 # We also include a renderer because we want to visualize what is going on in the environment
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
@@ -63,6 +63,12 @@ parser.add_argument('--enable-cudnn', action='store_true', help='Enable cuDNN (f
 parser.add_argument('--checkpoint-interval', default=0, help='How often to checkpoint the model, defaults to 0 (never checkpoint)')
 parser.add_argument('--memory', help='Path to save/load the memory from')
 parser.add_argument('--disable-bzip-memory', action='store_true', help='Don\'t zip the memory file. Not recommended (zipping is a bit slower and much, much smaller)')
+# Added by me
+parser.add_argument('--n_episodes', type=int, default=6000, help='Number of episodes to train the agent')
+
+
+# Env parameters
+parser.add_argument('--state_size', type=int, help='Size of state to feed to the NN')
 
 # Setup
 args = parser.parse_args()
@@ -154,6 +160,7 @@ env = RailEnv(width=width,
 env.reset()
 
 action_space = 2
+action_dict = {}
 # Init agent
 dqn = RainbowAgent(args, env)
 
@@ -173,63 +180,75 @@ priority_weight_increase = (1 - args.priority_weight) / (args.T_max - args.learn
 val_mem = ReplayMemory(args, args.evaluation_size)
 T, done = 0, True
 
+# Consider that the env is multiagent
+# TODO che fa esattamente sto pezzo?
+# Number of transitions to do for validating Q
 while T < args.evaluation_size:
     if done:
-        state, done = env.reset(), False
-
-    next_state, _, done = env.step(np.random.randint(0, action_space)) # This must change TODO
+        state, info = env.reset()
+        done = False
+    
+    for a in range(env.get_num_agents()):
+        action = np.random.randint(0, action_space)
+        action_dict.update({a: action})
+        
+    next_state, rewards, done, info = env.step(action_dict)  # This must change TODO
     val_mem.append(state, None, None, done)
     state = next_state
     T += 1
 
 
-if args.evaluate:
+if args.evaluate: # TODO Don't use this arg for the moment
     dqn.eval() # Set DQN (online network) to evolution mode
-    avg_reward, avg_Q = test(args, 0, dqn, val_mem, metrics, results_dir, evaluate=True) # Test
+    avg_reward, avg_Q = test(args, 0, dqn, val_mem, metrics, results_dir, evaluate=True)  # Test
     print('Avg. reward: ' + str(avg_reward) + ' | Avg. Q: ' + str(avg_Q))
 else:
     # Training loop
     dqn.train()
-    T, done = 0, True
-    for T in trange(1, args.T_max + 1):
-        if done:
-            state, done = env.reset(), False
 
-        if T % args.replay_frequency == 0:
-          dqn.reset_noise()  # Draw a new set of noisy weights
+    for ep in range(1, args.n_episodes + 1):
+        # Reset env at the beginning of one episode
+        state, info = env.reset(True, True)
 
-        action = dqn.act(state)  # Choose an action greedily (with noisy weights)
-        next_state, reward, done = env.step(action)  # Step
-        if args.reward_clip > 0:
-            reward = max(min(reward, args.reward_clip), -args.reward_clip)  # Clip rewards
-        mem.append(state, action, reward, done)  # Append transition to memory
-
-        # Train and test
-        if T >= args.learn_start:
-            mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1)  # Anneal importance sampling weight β to 1
-
+        for T in trange(1, args.T_max + 1):
             if T % args.replay_frequency == 0:
-              dqn.learn(mem)  # Train with n-step distributional double-Q learning
+                dqn.reset_noise()  # Draw a new set of noisy weights
 
-            if T % args.evaluation_interval == 0:
-                dqn.eval()  # Set DQN (online network) to evaluation mode
-                avg_reward, avg_Q = test(args, T, dqn, val_mem, metrics, results_dir)  # Test
-                log(
-                  'T = ' + str(T) + ' / ' + str(args.T_max) + ' | Avg. reward: ' + str(avg_reward) + ' | Avg. Q: ' + str(
-                    avg_Q))
-                dqn.train()  # Set DQN (online network) back to training mode
-  
-                # If memory path provided, save it
-                if args.memory is not None:
-                    save_memory(mem, args.memory, args.disable_bzip_memory)
-  
-            # Update target network
-            if T % args.target_update == 0:
-                dqn.update_target_net()
+            for a in range(env.get_num_agents()):
+                action = dqn.act(state)  # Choose an action greedily (with noisy weights)
+                next_state, reward, done = env.step(action)  # Step
+                if args.reward_clip > 0:
+                    reward = max(min(reward, args.reward_clip), -args.reward_clip)  # Clip rewards
+                    # TODO il memory replay nell'altro inseriva una tupla per ogni agente o tutto insieme?
+            mem.append(state, action, reward, done)  # Append transition to memory
 
-            # Checkpoint the network
-            if (args.checkpoint_interval != 0) and (T % args.checkpoint_interval == 0):
-                dqn.save(results_dir, 'checkpoint.pth')
-  
-        state = next_state
-  
+            # Train and test
+            if T >= args.learn_start:
+                # Anneal importance sampling weight β to 1
+                mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1) 
+
+                if T % args.replay_frequency == 0:
+                  dqn.learn(mem)  # Train with n-step distributional double-Q learning
+
+                if T % args.evaluation_interval == 0:
+                    dqn.eval()  # Set DQN (online network) to evaluation mode
+                    avg_reward, avg_Q = test(args, T, dqn, val_mem, metrics, results_dir)  # Test
+                    log(
+                      'T = ' + str(T) + ' / ' + str(args.T_max) + ' | Avg. reward: ' + str(avg_reward) + ' | Avg. Q: ' + str(
+                        avg_Q))
+                    dqn.train()  # Set DQN (online network) back to training mode
+    
+                    # If memory path provided, save it
+                    if args.memory is not None:
+                        save_memory(mem, args.memory, args.disable_bzip_memory)
+    
+                # Update target network
+                if T % args.target_update == 0:
+                    dqn.update_target_net()
+    
+                # Checkpoint the network
+                if (args.checkpoint_interval != 0) and (T % args.checkpoint_interval == 0):
+                    dqn.save(results_dir, 'checkpoint.pth')
+    
+            state = next_state
+

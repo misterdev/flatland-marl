@@ -14,6 +14,8 @@ from flatland.envs.rail_env_shortest_paths import get_shortest_paths
 from flatland.utils.ordered_set import OrderedSet
 
 
+# TODO 'Add action taken to come here' info
+
 class ShortestPathPredictorForRailEnv(PredictionBuilder):
     """
     ShortestPathPredictorForRailEnv object.
@@ -45,7 +47,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             - position axis 0
             - position axis 1
             - direction
-            - action taken to come here (not implemented yet)
+            - action taken to come here - my implementation
             The prediction at 0 is the current position, direction etc.
         """
         agents = self.env.agents
@@ -54,7 +56,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         distance_map: DistanceMap = self.env.distance_map
 
         shortest_paths = get_shortest_paths(distance_map, max_depth=self.max_depth)
-
+        self.shortest_paths = shortest_paths
         prediction_dict = {}
         for agent in agents:
 
@@ -88,6 +90,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             new_position = agent_virtual_position
             visited = OrderedSet()
             for index in range(1, self.max_depth + 1):
+                action = 0
                 # if we're at the target or not moving, stop moving until max_depth is reached
                 if new_position == agent.target or not agent.moving or not shortest_path:
                     prediction[index] = [index, *new_position, new_direction, RailEnvActions.STOP_MOVING]
@@ -95,6 +98,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
                     continue
 
                 if index % times_per_cell == 0:
+
                     new_position = shortest_path[0].position
                     new_direction = shortest_path[0].direction
 
@@ -102,6 +106,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
                 # prediction is ready
                 prediction[index] = [index, *new_position, new_direction, 0]
+                # prediction[index] = [index, *new_position, new_direction, action]
                 visited.add((*new_position, new_direction))
 
             # TODO: very bady side effects for visualization only: hand the dev_pred_dict back instead of setting on env!
@@ -128,3 +133,6 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
     def get_prediction_depth(self):
         return self.max_depth
+
+    def get_shortest_paths(self):
+        return self.shortest_paths

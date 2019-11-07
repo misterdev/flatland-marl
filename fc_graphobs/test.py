@@ -6,9 +6,22 @@ from flatland.envs.schedule_generators import sparse_schedule_generator
 # We also include a renderer because we want to visualize what is going on in the environment
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 
+
+import torch
+import sys
+# make sure the root path is in system path
+from pathlib import Path
+
+base_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(base_dir))
+from importlib_resources import path
 from fc_graphobs.graph_observations import GraphObsForRailEnv
 from fc_graphobs.predictions import ShortestPathPredictorForRailEnv
+from fc_graphobs.dueling_double_dqn_mod import Agent
 
+import fc_graphobs.nets
+
+import time
 
 class RandomAgent:
 
@@ -31,11 +44,11 @@ class RandomAgent:
         return
 
 
-width = 40
-height = 40
-nr_trains = 3  # Number of trains that have an assigned task in the env
-cities_in_map = 2  # Number of cities where agents can start or end
-seed = 1  # Random seed
+width = 60
+height = 60
+nr_trains = 5  # Number of trains that have an assigned task in the env
+cities_in_map = 3  # Number of cities where agents can start or end
+seed = 3  # Random seed
 grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
 max_rails_between_cities = 2  # Max number of tracks allowed between cities. This is number of entry point to a city
 max_rail_in_cities = 3  # Max number of parallel tracks within a city, representing a realistic train station
@@ -61,7 +74,8 @@ stochastic_data = {'prop_malfunction': 0.3,  # Percentage of defective agents
                    'max_duration': 20  # Max duration of malfunction
                    }
 
-observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=10))
+prediction_depth = 30
+observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=30))
 
 # Construct the environment with the given observation, generators, predictors, and stochastic data
 env = RailEnv(width=width,
@@ -82,41 +96,45 @@ env_renderer = RenderTool(env, gl="PILSVG",
                           screen_height=1080,  # Adjust these parameters to fit your resolution
                           screen_width=1920)  # Adjust these parameters to fit your resolution
 
-controller = RandomAgent(218, env.action_space[0])
-action_dict = dict()
+state_size = prediction_depth + 3
+network_action_size = 2
+# controller = RandomAgent(218, env.action_space[0])
+controller = Agent(state_size, network_action_size)
+network_action_dict = dict()
+railenv_action_dict = dict()
 
-# Chose an action for each agent
-for a in range(env.get_num_agents()):
-    action = controller.act(0)
-    action_dict.update({a: action})
-# Do the environment step
-observations, rewards, dones, information = env.step(action_dict)
-print("\n The following agents can register an action:")
-print("========================================")
-for info in information['action_required']:
-    print("Agent {} needs to submit an action.".format(info))
+observations, infos = env.reset(True, True)
 env_renderer.reset()
 
 score = 0
 # Run episode
 frame_step = 0
 
-for step in range(50):
+# Here you can pre-load an agent
+with path(fc_graphobs.nets, "avoid_checkpoint100.pth") as file_in:
+    controller.qnetwork_local.load_state_dict(torch.load(file_in))
+
+for step in range(200):
+    time.sleep(0.2)
     # Chose an action for each agent in the environment
     for a in range(env.get_num_agents()):
-        action = controller.act(observations[a])  # always returns 2
-        action_dict.update({a: action})
+        shortest_path_action = int(observation_builder.get_shortest_path_action(a))
+        # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
+        # 'network_action' is None if act() returned a random sampled action
+        railenv_action, network_action = controller.act(observations[a], shortest_path_action)
+        railenv_action_dict.update({a: railenv_action})
+        network_action_dict.update({a: network_action})
 
     # Environment step which returns the observations for all agents, their corresponding
     # reward and whether their are done
 
-    next_obs, all_rewards, done, _ = env.step(action_dict)
+    next_obs, all_rewards, done, _ = env.step(railenv_action_dict)
 
     env_renderer.render_env(show=True, show_observations=False, show_predictions=False)
     frame_step += 1
     # Update replay buffer and train agent
     for a in range(env.get_num_agents()):
-        controller.step((observations[a], action_dict[a], all_rewards[a], next_obs[a], done[a]))
+        controller.step(observations[a], network_action_dict[a], all_rewards[a], next_obs[a], done[a])
         score += all_rewards[a]
 
     observations = next_obs.copy()
