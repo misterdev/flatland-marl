@@ -125,7 +125,6 @@ class GraphObsForRailEnv(ObservationBuilder):
         # shape (prediction_depth + 3, )
         agent_obs = np.append(occupancy, (priority, n_agents_malfunctioning, n_agents_ready_to_depart))
         
-        shortest_path_action = 2 # TODO Compute next action according to chosen path (need only the first, not the sequence)
         # With this obs the agent actually decided only if it has to move or stop
         return agent_obs
         #return agent_obs, shortest_path_action
@@ -133,17 +132,28 @@ class GraphObsForRailEnv(ObservationBuilder):
     def get_shortest_path_action(self, handle):
 
         agent = self.env.agents[handle]
+
         if agent.status == RailAgentStatus.READY_TO_DEPART:
-            action = RailEnvActions.MOVE_FORWARD
-        elif agent.status == RailAgentStatus.ACTIVE:
             shortest_paths = self.predictor.get_shortest_paths()
-            step = shortest_paths[handle][0]
-            action = step[2][0]  # Get next_action_element
-        else: # If status == DONE
+            if shortest_paths[handle] is None:  # TODO Fix
+                action = RailEnvActions.STOP_MOVING
+            else:
+                step = shortest_paths[handle][0]
+                action = step[2][0]  # Get next_action_element
+
+        elif agent.status == RailAgentStatus.ACTIVE:
+            # This can return None when rails are disconnected or there was an error in the DistanceMap
+            shortest_paths = self.predictor.get_shortest_paths()
+            if shortest_paths[handle] is None:  # TODO Fix
+                action = RailEnvActions.STOP_MOVING
+            else:
+                step = shortest_paths[handle][0]
+                action = step[2][0]  # Get next_action_element
+
+        else:  # If status == DONE
             action = RailEnvActions.DO_NOTHING
 
         return action
-
 
     def _bfs_graph(self, handle: int = 0) -> {}:
         obs_graph = defaultdict(list)  # dict

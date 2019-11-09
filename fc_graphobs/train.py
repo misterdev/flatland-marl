@@ -6,6 +6,8 @@ import torch
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator, complex_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
+from flatland.envs.malfunction_generators import malfunction_from_params
+
 # We also include a renderer because we want to visualize what is going on in the environment
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 
@@ -14,12 +16,13 @@ from fc_graphobs.predictions import ShortestPathPredictorForRailEnv
 
 # I can import files from the other folder
 from fc_graphobs.dueling_double_dqn_mod import Agent
+from fc_graphobs.print_info import print_info
 
 width = 40#16 * 7  # With of map
 height = 40# 9 #* 7  # Height of map
 nr_trains = 4#20  # Number of trains that have an assigned task in the env
 cities_in_map = 4#20  # Number of cities where agents can start or end
-seed = 14  # Random seed
+seed = 5  # Random seed    
 grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
 max_rails_between_cities = 2  # Max number of tracks allowed between cities. This is number of entry point to a city
 max_rail_in_city = 3 #6  # Max number of parallel tracks within a city, representing a realistic train station
@@ -39,13 +42,13 @@ speed_ration_map = {1.: 0.25,  # Fast passenger train
 
 schedule_generator = sparse_schedule_generator(speed_ration_map)
 
-stochastic_data = {'prop_malfunction': 0.3,  # Percentage of defective agents
-                   'malfunction_rate': 30,  # Rate of malfunction occurrence
-                   'min_duration': 3,  # Minimal duration of malfunction
-                   'max_duration': 20  # Max duration of malfunction
-                   }
+stochastic_data = {
+    'malfunction_rate': 50,  # Rate of malfunction occurrence of single agent
+    'min_duration': 15,  # Minimal duration of malfunction
+    'max_duration': 50  # Max duration of malfunction
+    }
 
-prediction_depth = 30
+prediction_depth = 40
 bfs_depth = 4
 observation_builder = GraphObsForRailEnv(bfs_depth=bfs_depth, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
 
@@ -55,10 +58,9 @@ env = RailEnv(width=width,
               rail_generator=rail_generator,
               schedule_generator=schedule_generator,
               number_of_agents=nr_trains,
-              stochastic_data=stochastic_data,  # Malfunction data generator
               obs_builder_object=observation_builder,
-              remove_agents_at_target=True  # Removes agents at the end of their journey to make space for others
-              )
+              malfunction_generator_and_process_data=malfunction_from_params(stochastic_data),
+              remove_agents_at_target=True)
 env.reset()
 # Hardcoded params
 state_size = prediction_depth + 3
@@ -97,22 +99,41 @@ for ep in range(1, n_episodes + 1):
 
     score = 0
     env_done = 0
+
+    # Pick first action
+    for a in range(env.get_num_agents()):
+        shortest_path_action = int(observation_builder.get_shortest_path_action(a))
+        # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
+        # 'network_action' is None if act() returned a random sampled action
+        railenv_action, network_action = agent.act(agent_obs[a], shortest_path_action, eps=eps)
+        action_prob[railenv_action] += 1
+        railenv_action_dict.update({a: railenv_action})
+        network_action_dict.update({a: network_action})
+
+    # Environment step
+    next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
     for step in range(max_steps):
 
-        # Pick action
-        for a in range(env.get_num_agents()):
-            shortest_path_action = int(observation_builder.get_shortest_path_action(a))
-            # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
-            # 'network_action' is None if act() returned a random sampled action
-            railenv_action, network_action = agent.act(agent_obs[a], shortest_path_action, eps=eps)
-            action_prob[railenv_action] += 1
-            railenv_action_dict.update({a: railenv_action})
-            network_action_dict.update({a: network_action})
+        # Logging
+        #print_info(env)
 
-        # Environment step
-        # Convert actions here
-        next_obs, all_rewards, done, _ = env.step(railenv_action_dict) # tra 0 e 4
+        for a in infos['action_required']:
+            # Agent performs action only if required ?
+                shortest_path_action = int(observation_builder.get_shortest_path_action(a))
+                # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
+                # 'network_action' is None if act() returned a random sampled action
+                railenv_action, network_action = agent.act(agent_obs[a], shortest_path_action, eps=eps)
+                action_prob[railenv_action] += 1
+                railenv_action_dict.update({a: railenv_action})
+                network_action_dict.update({a: network_action})
 
+        # Which agents needs to pick and action
+        '''
+        print("\n The following agents can register an action:")
+        print("========================================")
+        for info in infos['action_required']:
+            print("Agent {} needs to submit an action.".format(info))
+        '''
         # Normalize obs TODO
         for a in range(env.get_num_agents()):
             agent_next_obs[a] = next_obs[a]
@@ -150,7 +171,7 @@ for ep in range(1, n_episodes + 1):
                 100 * np.mean(done_window),
                 eps, action_prob / np.sum(action_prob)), end=" ")
 
-        if ep % 100 == 0:
+        if ep % 10 == 0:
             print(
                 '\rTraining {} Agents.\t Episode {}\t Average Score: {:.3f}\tDones: {:.2f}%\tEpsilon: {:.2f} \t Action Probabilities: \t {}'.format(
                     env.get_num_agents(),
@@ -162,6 +183,5 @@ for ep in range(1, n_episodes + 1):
             torch.save(agent.qnetwork_local.state_dict(),
                        './nets/avoid_checkpoint' + str(ep) + '.pth')
             action_prob = [1] * railenv_action_size
-    plt.plot(scores)
-    plt.show()
-
+plt.plot(scores)
+plt.show()

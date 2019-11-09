@@ -1,27 +1,26 @@
-from flatland.envs.observations import GlobalObsForRailEnv
+import torch
+import sys
 # First of all we import the Flatland rail environment
 from flatland.envs.rail_env import RailEnv
-from flatland.envs.rail_generators import sparse_rail_generator, complex_rail_generator
+from flatland.envs.rail_generators import sparse_rail_generator, complex_rail_generator, rail_from_file
 from flatland.envs.schedule_generators import sparse_schedule_generator
 # We also include a renderer because we want to visualize what is going on in the environment
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
+from flatland.envs.malfunction_generators import malfunction_from_params
 
-
-import torch
-import sys
 # make sure the root path is in system path
 from pathlib import Path
-
-base_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(base_dir))
 from importlib_resources import path
 from fc_graphobs.graph_observations import GraphObsForRailEnv
 from fc_graphobs.predictions import ShortestPathPredictorForRailEnv
 from fc_graphobs.dueling_double_dqn_mod import Agent
-
+from fc_graphobs.print_info import print_info
 import fc_graphobs.nets
-
 import time
+
+base_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(base_dir))
+
 
 class RandomAgent:
 
@@ -47,8 +46,8 @@ class RandomAgent:
 width = 60
 height = 60
 nr_trains = 5  # Number of trains that have an assigned task in the env
-cities_in_map = 3  # Number of cities where agents can start or end
-seed = 3  # Random seed
+cities_in_map = 4  # Number of cities where agents can start or end
+seed = 2  # Random seed
 grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
 max_rails_between_cities = 2  # Max number of tracks allowed between cities. This is number of entry point to a city
 max_rail_in_cities = 3  # Max number of parallel tracks within a city, representing a realistic train station
@@ -60,6 +59,10 @@ rail_generator = sparse_rail_generator(max_num_cities=cities_in_map,
                                        max_rails_between_cities=max_rails_between_cities,
                                        max_rails_in_city=max_rail_in_cities,
                                        )
+
+
+# rail_generator = rail_from_file("../test-envs/Test_0/Level_0.pkl")
+
 # Maps speeds to % of appearance in the env TODO Find reasonable values
 speed_ration_map = {1.: 0.25,  # Fast passenger train
                     1. / 2.: 0.25,  # Fast freight train
@@ -68,14 +71,14 @@ speed_ration_map = {1.: 0.25,  # Fast passenger train
 
 schedule_generator = sparse_schedule_generator(speed_ration_map)
 
-stochastic_data = {'prop_malfunction': 0.3,  # Percentage of defective agents
-                   'malfunction_rate': 30,  # Rate of malfunction occurrence
-                   'min_duration': 3,  # Minimal duration of malfunction
-                   'max_duration': 20  # Max duration of malfunction
-                   }
+stochastic_data = {
+    'malfunction_rate': 10000,  # Rate of malfunction occurrence of single agent
+    'min_duration': 15,  # Minimal duration of malfunction
+    'max_duration': 50  # Max duration of malfunction
+    }
 
 prediction_depth = 30
-observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=30))
+observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
 
 # Construct the environment with the given observation, generators, predictors, and stochastic data
 env = RailEnv(width=width,
@@ -83,10 +86,9 @@ env = RailEnv(width=width,
               rail_generator=rail_generator,
               schedule_generator=schedule_generator,
               number_of_agents=nr_trains,
-              stochastic_data=stochastic_data,  # Malfunction data generator
               obs_builder_object=observation_builder,
-              remove_agents_at_target=True  # Removes agents at the end of their journey to make space for others
-              )
+              malfunction_generator_and_process_data=malfunction_from_params(stochastic_data),
+              remove_agents_at_target=True)
 env.reset()
 
 # Initiate the renderer
@@ -111,11 +113,12 @@ score = 0
 frame_step = 0
 
 # Here you can pre-load an agent
-with path(fc_graphobs.nets, "avoid_checkpoint100.pth") as file_in:
+with path(fc_graphobs.nets, "avoid_checkpoint20.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
 
 for step in range(200):
-    time.sleep(0.2)
+
+    print_info(env)
     # Chose an action for each agent in the environment
     for a in range(env.get_num_agents()):
         shortest_path_action = int(observation_builder.get_shortest_path_action(a))
@@ -129,6 +132,12 @@ for step in range(200):
     # reward and whether their are done
 
     next_obs, all_rewards, done, _ = env.step(railenv_action_dict)
+
+    # Which agents needs to pick and action
+    print("\n The following agents can register an action:")
+    print("========================================")
+    for info in infos['action_required']:
+        print("Agent {} needs to submit an action.".format(info))
 
     env_renderer.render_env(show=True, show_observations=False, show_predictions=False)
     frame_step += 1
