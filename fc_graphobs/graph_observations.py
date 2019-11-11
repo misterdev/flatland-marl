@@ -43,8 +43,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         self.bfs_depth = bfs_depth
         self.predictor = predictor
         self.prediction_dict = {}
-
-
+        
 
     def set_env(self, env: Environment):
         super().set_env(env)
@@ -59,7 +58,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         observations = {}
         self.prediction_dict = self.predictor.get()
         if self.predictor:
-            # TODO Qua nel mezzo c'è roba che non serve
+            # Useful to check if occupancy is correctly computed
             self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
             self.max_prediction_depth = 0
             self.predicted_pos = {}
@@ -89,7 +88,6 @@ class GraphObsForRailEnv(ObservationBuilder):
     def get(self, handle: int = 0) -> {}:
 
         # TODO For the moment: computes the obs_graph (must be used for search - dunno what to do with it exactly)
-        prediction_depth = len(self.cells_sequence[0])
         bfs_graph = self._bfs_graph(handle)
         agents = self.env.agents
         # Debug
@@ -128,7 +126,11 @@ class GraphObsForRailEnv(ObservationBuilder):
         # With this obs the agent actually decided only if it has to move or stop
         return agent_obs
         #return agent_obs, shortest_path_action
-
+    
+    '''
+    Takes an agent handle and returns next action for that agent following shortest path, according to
+    function available in the prediction utils. 
+    '''
     def get_shortest_path_action(self, handle):
 
         agent = self.env.agents[handle]
@@ -227,8 +229,10 @@ class GraphObsForRailEnv(ObservationBuilder):
         # g = build_graph(obs_graph, handle)  # TODO Uncomment
 
         return obs_graph
-
-    # Find next branching point
+    
+    '''
+    Given agent handle, current position, and direction, explore that path until a new branching point is found.
+    '''
     def _explore_path(self, handle, position, direction):
 
         # Continue along direction until next switch or
@@ -292,37 +296,60 @@ class GraphObsForRailEnv(ObservationBuilder):
 
     # TODO Improve notion of conflict, should consider also agent direction and branch (see TreeObs)
     '''
-    Function that given predicted cells sequence for two different agents (as list of tuples) and a specific time step
-    returns 1 if a possible conflict is predicted at that ts.
-    Precondition: 0 < ts < prediction_depth - 1
+    Function that given 
+    Precondition: 0 <= ts <= self.max_prediction_depth - 1
     '''
-    def _possible_conflict(self, sequence, possible_overlapping_sequence, ts):
+    def _possible_conflict(self, handle, ts):
+            # DEBUG errors in position compute
+            occupancy_counter = 0
+            cell_pos = self.predictor.compute_cells_sequence(self.prediction_dict)[handle][ts]
+            int_pos = coordinate_to_position(self.env.width, [cell_pos])
+            pre_ts = max(0, ts - 1)
+            post_ts = min(self.max_prediction_depth - 1, ts + 1)
+            int_direction = int(self.predicted_dir[ts][handle])
+            cell_transitions = self.env.rail.get_transitions(int(cell_pos[0]), int(cell_pos[1]), int_direction)
 
-            cell_pos = sequence[ts]
-            if cell_pos == possible_overlapping_sequence[ts] or cell_pos == possible_overlapping_sequence[ts-1] or cell_pos == possible_overlapping_sequence[ts+1]:
+            '''
+            if cell_pos == possible_overlapping_sequence[ts] or cell_pos == possible_overlapping_sequence[pre_ts] or int_pos == possible_overlapping_sequence[post_ts]:
                 return 1
-            return 0
+            '''
+            # Careful, int_pos, predicted_pos are not (y, x) but are given as int
+            if int_pos in np.delete(self.predicted_pos[ts], handle, 0):
+                conflicting_agents = np.where(self.predicted_pos[ts] == int_pos)
+                for ca in conflicting_agents[0]:
+                    if self.predicted_dir[ts][handle] != self.predicted_dir[ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[ts][ca])] == 1:
+                        occupancy_counter += 1
+                        
+            elif int_pos in np.delete(self.predicted_pos[pre_ts], handle, 0):
+                conflicting_agents = np.where(self.predicted_pos[pre_ts] == int_pos)
+                for ca in conflicting_agents[0]:
+                    if self.predicted_dir[ts][handle] != self.predicted_dir[pre_ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[pre_ts][ca])] == 1:
+                        occupancy_counter += 1
+                        
+            elif int_pos in np.delete(self.predicted_pos[post_ts], handle, 0):
+                conflicting_agents = np.where(self.predicted_pos[post_ts] == int_pos)
+                for ca in conflicting_agents[0]:
+                    if self.predicted_dir[ts][handle] != self.predicted_dir[post_ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[post_ts][ca])] == 1:
+                        occupancy_counter += 1
+                        
+            return occupancy_counter
 
     '''
     Returns one-hot encoding of agent occupancy as an array where each element is
     0: no other agent in this cell at this ts
-    >= 1: (probably) other agents here at the same ts, so conflict, e.g. if 1 => one possible conflict, 2 => 2 possible conflicts, etc.
+    >= 1: counter (probably) other agents here at the same ts, so conflict, e.g. if 1 => one possible conflict, 2 => 2 possible conflicts, etc.
     '''
     def _fill_occupancy(self, handle):
-        agents = self.env.agents
-        agent = agents[handle]
-        other_agents = []
-        for a in agents:
-            if not a == agent:
-                other_agents.append(a)
 
-        prediction_depth = self.predictor.get_prediction_depth()
-        occupancy = np.zeros(prediction_depth)
-        cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
-        agent_sequence = cells_sequence[handle]
-        for a in other_agents:
-            possible_overlapping_sequence = cells_sequence[a.handle]
-            for ts in range(1, prediction_depth - 1):  # TODO Check if it works at first and last ts
-                occupancy[ts] += self._possible_conflict(agent_sequence, possible_overlapping_sequence, ts)
+        occupancy = np.zeros(self.max_prediction_depth - 1)
 
+        for ts in range(0, self.max_prediction_depth - 1):
+            occupancy[ts] = self._possible_conflict(handle, ts)
+            
         return occupancy
+    
+    '''
+    Invert direction (int) of one agent.
+    '''
+    def _reverse_dir(self, direction):
+        return int((direction + 2) % 4)
