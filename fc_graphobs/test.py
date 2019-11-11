@@ -51,17 +51,17 @@ config = ConfigObj("./tests-config.ini")
 tests = config.sections
 n_tests = len(tests)
 
+'''
 width = 60
 height = 60
 nr_trains = 5  # Number of trains that have an assigned task in the env
 cities_in_map = 4  # Number of cities where agents can start or end
-seed = 2  # Random seed
-grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
 max_rails_between_cities = 2  # Max number of tracks allowed between cities. This is number of entry point to a city
 max_rail_in_cities = 3  # Max number of parallel tracks within a city, representing a realistic train station
-
-
-
+'''
+seed = 2  # Random seed
+grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
+init_render_env = True # True if RenderEnv must be initialized
 
 # rail_generator = rail_from_file("../test-envs/Test_0/Level_0.pkl")
 
@@ -107,7 +107,7 @@ for test in tests:
                             max_rails_in_city=config[test].as_int('max_rail_in_city')
                   ),
                   schedule_generator=schedule_generator,
-                  number_of_agents=nr_trains,
+                  number_of_agents=config[test].as_int('n_agents'),
                   obs_builder_object=observation_builder,
                   malfunction_generator_and_process_data=malfunction_from_params(
                       parameters={
@@ -116,13 +116,15 @@ for test in tests:
                         'max_duration': config[test].as_int('max_duration')  # Max duration of malfunction
                         }),
                   remove_agents_at_target=True)
-
-    # Initiate the renderer # TODO Inizializzare il render_env una sola volta
-    env_renderer = RenderTool(env, gl="PILSVG",
-                              agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS_AND_BOX,
-                              show_debug=True,
-                              screen_height=1080,  # Adjust these parameters to fit your resolution
-                              screen_width=1920)  # Adjust these parameters to fit your resolution
+    
+    if init_render_env:
+        # Initiate the renderer
+        env_renderer = RenderTool(env, gl="PILSVG",
+                                  agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS_AND_BOX,
+                                  show_debug=True,
+                                  screen_height=1080,
+                                  screen_width=1920)
+        init_render_env = False # Init RenderEnv only once
 
     observations, infos = env.reset(True, True)
     env_renderer.reset()
