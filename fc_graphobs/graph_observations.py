@@ -136,12 +136,14 @@ class GraphObsForRailEnv(ObservationBuilder):
         agent = self.env.agents[handle]
 
         if agent.status == RailAgentStatus.READY_TO_DEPART:
-            shortest_paths = self.predictor.get_shortest_paths()
-            if shortest_paths[handle] is None:  # TODO Fix
-                action = RailEnvActions.STOP_MOVING
-            else:
-                step = shortest_paths[handle][0]
-                action = step[2][0]  # Get next_action_element
+            #shortest_paths = self.predictor.get_shortest_paths()
+            #if shortest_paths[handle] is None:  # TODO Fix
+            #    action = RailEnvActions.STOP_MOVING
+            #else:
+            #    step = shortest_paths[handle][0]
+            #    action = step[2][0]  # Get next_action_element
+            # This could be reasonable since agents never start on switches - I guess
+            action = RailEnvActions.MOVE_FORWARD
 
         elif agent.status == RailAgentStatus.ACTIVE:
             # This can return None when rails are disconnected or there was an error in the DistanceMap
@@ -150,7 +152,14 @@ class GraphObsForRailEnv(ObservationBuilder):
                 action = RailEnvActions.STOP_MOVING
             else:
                 step = shortest_paths[handle][0]
-                action = step[2][0]  # Get next_action_element
+                next_action_element = step[2][0]  # Get next_action_element
+                # Just to use the correct form/name
+                if next_action_element == 1:
+                    action = RailEnvActions.MOVE_LEFT
+                elif next_action_element == 2:
+                    action = RailEnvActions.MOVE_FORWARD
+                elif next_action_element == 3:
+                    action = RailEnvActions.MOVE_RIGHT
 
         else:  # If status == DONE
             action = RailEnvActions.DO_NOTHING

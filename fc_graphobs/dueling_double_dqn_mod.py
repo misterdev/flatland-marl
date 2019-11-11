@@ -99,14 +99,14 @@ class Agent:
                 return railenv_action, network_action
             else:
                 # Pick action according to shortest path
-                railenv_action = int(shortest_path_action)  # TODO
+                railenv_action = shortest_path_action  # TODO
                 return railenv_action, network_action
         else:
             network_action = random.choice(np.arange(2))
-            railenv_action = int(shortest_path_action) # TODO
+            railenv_action = shortest_path_action # TODO
             if network_action == 1:
                 return RailEnvActions.STOP_MOVING, 1 # Stop, stop
-            else: # should return shortest
+            else: # Should return shortest
                 return railenv_action, 0  # Choose from five possible actions available randomly
 
     def learn(self, experiences, gamma):
