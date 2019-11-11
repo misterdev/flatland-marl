@@ -105,7 +105,7 @@ def main():
         env_done = 0
         # Pick first action
         for a in range(env.get_num_agents()):
-            shortest_path_action = int(observation_builder.get_shortest_path_action(a))
+            shortest_path_action = observation_builder.get_shortest_path_action(a)
             # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
             # 'network_action' is None if act() returned a random sampled action
             railenv_action, network_action = agent.act(agent_obs[a], shortest_path_action, eps=eps)
@@ -122,13 +122,16 @@ def main():
 
             for a in infos['action_required']:
                 # Agent performs action only if required
-                    shortest_path_action = int(observation_builder.get_shortest_path_action(a))
+                    shortest_path_action = observation_builder.get_shortest_path_action(a)
                     # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
                     # 'network_action' is None if act() returned a random sampled action
                     railenv_action, network_action = agent.act(agent_obs[a], shortest_path_action, eps=eps)
                     action_prob[railenv_action] += 1
                     railenv_action_dict.update({a: railenv_action})
                     network_action_dict.update({a: network_action})
+
+            # Environment step
+            next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
 
             # Which agents needs to pick and action
             '''
