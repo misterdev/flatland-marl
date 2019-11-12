@@ -65,7 +65,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
 
         if self.prediction_dict:
-            for t in range(self.predictor.max_depth + 1): # Perché +1?
+            for t in range(self.predictor.max_depth + 1): #  +1?
                 pos_list = []
                 dir_list = []
                 for a in handles:
@@ -84,16 +84,20 @@ class GraphObsForRailEnv(ObservationBuilder):
         return observations
 
     '''
-    Return a graph (dict) of nodes, where nodes are identified by ids, graph is directed, depends on agent direction
-    (that are tuples that represent the cell position, eg (11, 23))
+    Returns obs for one agent, obs are a single array of concatenated values representing:
+    - occupancy, 
+    - 
+    - 
+    - 
     '''
+    # TODO At the moment bfs_graph is not used (but can be used for path search if shortest path strategy fails)
+    # TODO We may need some normalization depending on the type of data that the part of obs represents
+    # TODO agent_obs needs to take into consideration only encountered agents, not all
     def get(self, handle: int = 0) -> {}:
 
-        # TODO For the moment: computes the obs_graph (can be used for path search)
         bfs_graph = self._bfs_graph(handle)
         agents = self.env.agents
-        # Debug
-        # Visualize paths that are overlapping (use graph tool?) or print to file
+        # Debug - Visualize paths that are overlapping (use graph tool?) or print to file
         '''
         for a in agents:
             print(str(a.handle) + ": ", end='')
@@ -108,7 +112,6 @@ class GraphObsForRailEnv(ObservationBuilder):
         # An agent that is malfunctioning has no priority
         if agents[handle].malfunction_data['malfunction'] == 0:
             priority = agents[handle].speed_data['speed']
-        # TODO We may need some normalization depending on the type of data that the part of obs represents
 
         # Malfunctioning obs: malfunction, malfunction_rate, next_malfunction, nr_malfunctions
         # Counting number of agents that are currently malfunctioning (globally) - experimental
@@ -127,30 +130,26 @@ class GraphObsForRailEnv(ObservationBuilder):
         
         # With this obs the agent actually decided only if it has to move or stop
         return agent_obs
-        #return agent_obs, shortest_path_action
     
     '''
-    Takes an agent handle and returns next action for that agent following shortest path, according to
-    function available in the prediction utils. 
+    Takes an agent handle and returns next action for that agent following shortest path:
+    - if agent status == READY_TO_DEPART => agent moves forward;
+    - if agent status == ACTIVE => pick action using shortest_path() fun available in prediction utils;
+    - if agent status == DONE => agent does nothing.
     '''
+    # TODO Stop when shortest_path() says that rail is disrupted 
     def get_shortest_path_action(self, handle):
 
         agent = self.env.agents[handle]
 
         if agent.status == RailAgentStatus.READY_TO_DEPART:
-            #shortest_paths = self.predictor.get_shortest_paths()
-            #if shortest_paths[handle] is None:  # TODO Fix
-            #    action = RailEnvActions.STOP_MOVING
-            #else:
-            #    step = shortest_paths[handle][0]
-            #    action = step[2][0]  # Get next_action_element
             # This could be reasonable since agents never start on switches - I guess
             action = RailEnvActions.MOVE_FORWARD
 
         elif agent.status == RailAgentStatus.ACTIVE:
             # This can return None when rails are disconnected or there was an error in the DistanceMap
             shortest_paths = self.predictor.get_shortest_paths()
-            if shortest_paths[handle] is None:  # TODO Fix
+            if shortest_paths[handle] is None:  # Railway disrupted
                 action = RailEnvActions.STOP_MOVING
             else:
                 step = shortest_paths[handle][0]
@@ -167,7 +166,11 @@ class GraphObsForRailEnv(ObservationBuilder):
             action = RailEnvActions.DO_NOTHING
 
         return action
-
+    
+    '''
+    Build a graph (dict) of nodes, where nodes are identified by ids, graph is directed, depends on agent direction
+    (that are tuples that represent the cell position, eg (11, 23))
+    '''
     def _bfs_graph(self, handle: int = 0) -> {}:
         obs_graph = defaultdict(list)  # dict
         visited_nodes = set()  # set
@@ -305,11 +308,15 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         return node
 
-    # TODO Improve notion of conflict, should consider also agent direction and branch (see TreeObs)
     '''
-    Function that given 
+    Function that given agent (as handle) and time step, returns a counter that represents the sum of possible conflicts with
+    other agents.
+    Possible conflict is computed considering time step (current, pre and stop), direction, and possibility to enter that cell
+    in opposite direction (w.r.t. to current agent).
     Precondition: 0 <= ts <= self.max_prediction_depth - 1
     '''
+    # TODO Improve notion of conflict, should consider also branching?
+
     def _possible_conflict(self, handle, ts):
 
             occupancy_counter = 0
@@ -319,7 +326,6 @@ class GraphObsForRailEnv(ObservationBuilder):
             int_pos = self.predicted_pos[ts][handle]
             pre_ts = max(0, ts - 1)
             post_ts = min(self.max_prediction_depth - 1, ts + 1)
-            val = self.predicted_dir[ts][handle]
             int_direction = int(self.predicted_dir[ts][handle])
             cell_transitions = self.env.rail.get_transitions(int(cell_pos[0]), int(cell_pos[1]), int_direction)
 
@@ -349,7 +355,7 @@ class GraphObsForRailEnv(ObservationBuilder):
             return occupancy_counter
 
     '''
-    Returns one-hot encoding of agent occupancy as an array where each element is
+    Returns encoding of agent occupancy as an array where each element is
     0: no other agent in this cell at this ts
     >= 1: counter (probably) other agents here at the same ts, so conflict, e.g. if 1 => one possible conflict, 2 => 2 possible conflicts, etc.
     '''

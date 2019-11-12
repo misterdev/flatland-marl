@@ -73,7 +73,7 @@ def main():
     state_size = prediction_depth + 3
     network_action_size = 2  # {follow path, stop}
     railenv_action_size = 5  # The RailEnv possible actions
-    n_episodes = 1000
+    n_episodes = 300
     max_steps = int(4 * 2 * (width + height + nr_trains/cities_in_map))
     eps = 1.
     eps_end = 0.005
@@ -190,6 +190,15 @@ def main():
                 formatted_action_prob), end=" ")
 
         if ep % 100 == 0:
+            print(
+                '\rTraining {} Agents.\t Episode {}\t Average Score: {:.3f}\tDones: {:.2f}%\tEpsilon: {:.2f} \t Action Probabilities: \t {}'.format(
+                    env.get_num_agents(),
+                    ep,
+                    np.mean(scores_window),
+                    100 * np.mean(done_window),
+                    100 * (num_agents_done/nr_trains),
+                    eps,
+                    formatted_action_prob))
             torch.save(agent.qnetwork_local.state_dict(),'./nets/avoid_checkpoint' + str(ep) + '.pth')
             action_prob = [1] * railenv_action_size
 

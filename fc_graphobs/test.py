@@ -23,30 +23,6 @@ from configobj import ConfigObj
 base_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(base_dir))
 
-'''
-class RandomAgent:
-
-    def __init__(self, state_size, action_size):
-        self.state_size = state_size
-        self.action_size = action_size
-
-    def act(self, state):
-        return 2
-
-    def step(self, memories):
-        return
-
-    def save(self, filename):
-        # Store the current policy
-        return
-
-    def load(self, filename):
-        # Load a policy
-        return
-
-'''
-
-
 config = ConfigObj("./tests-config.ini")
 tests = config.sections
 n_tests = len(tests)
@@ -65,7 +41,7 @@ init_render_env = True # True if RenderEnv must be initialized
 
 # rail_generator = rail_from_file("../test-envs/Test_0/Level_0.pkl")
 
-# Maps speeds to % of appearance in the env TODO Find reasonable values
+# Maps speeds to % of appearance in the env
 speed_ration_map = {1.: 0.25,  # Fast passenger train
                     1. / 2.: 0.25,  # Fast freight train
                     1. / 3.: 0.25,  # Slow commuter train
@@ -73,25 +49,23 @@ speed_ration_map = {1.: 0.25,  # Fast passenger train
 
 schedule_generator = sparse_schedule_generator(speed_ration_map)
 
-
-
 prediction_depth = 40
 observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
 
 
 state_size = prediction_depth + 3
 network_action_size = 2
-# controller = RandomAgent(218, env.action_space[0])
 controller = Agent(state_size, network_action_size)
 network_action_dict = dict()
 railenv_action_dict = dict()
+max_n_agents_at_ts = 10  # TODO Max number of agents that can be present in the grid at the same time
 
 score = 0
 # Run episode
 frame_step = 0
 
 # Here you can pre-load an agent
-with path(fc_graphobs.nets, "avoid_checkpoint60.pth") as file_in:
+with path(fc_graphobs.nets, "avoid_checkpoint40.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
 
 for test in tests:
@@ -100,14 +74,14 @@ for test in tests:
     env = RailEnv(width=config[test].as_int('width'),
                   height=config[test].as_int('height'),
                   rail_generator=sparse_rail_generator(
-                            max_num_cities=config[test].as_int('n_cities'), 
+                            max_num_cities=config[test].as_int('max_num_cities'), 
                             seed=seed,
                             grid_mode=grid_distribution_of_cities,
                             max_rails_between_cities=config[test].as_int('max_rails_between_cities'),
                             max_rails_in_city=config[test].as_int('max_rail_in_city')
                   ),
                   schedule_generator=schedule_generator,
-                  number_of_agents=config[test].as_int('n_agents'),
+                  number_of_agents=config[test].as_int('num_agents'),
                   obs_builder_object=observation_builder,
                   malfunction_generator_and_process_data=malfunction_from_params(
                       parameters={
@@ -128,13 +102,27 @@ for test in tests:
 
     observations, infos = env.reset(True, True)
     env_renderer.reset()
-    max_time_steps = int(4 * 2 * (config[test].as_int('width') + config[test].as_int('height') + config[test].as_int('n_agents') / config[test].as_int('n_cities')))
+    # TODO Change 'max_num_cities' to 'num_cities' (effective) when this info will be available
+    max_time_steps = int(4 * 2 * (config[test].as_int('width') + config[test].as_int('height') + config[test].as_int('num_agents') / config[test].as_int('max_num_cities')))
 
-    for step in range(max_time_steps):
+    # Pick first action
+    for a in range(env.get_num_agents()):
+        shortest_path_action = int(observation_builder.get_shortest_path_action(a))
+        # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
+        # 'network_action' is None if act() returned a random sampled action
+        railenv_action, network_action = controller.act(observations[a], shortest_path_action)
+        railenv_action_dict.update({a: railenv_action})
+        network_action_dict.update({a: network_action})
+
+    # Environment step
+    next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
+
+    for step in range(max_time_steps - 1):
     
         print_info(env)
         # Chose an action for each agent in the environment
-        for a in range(env.get_num_agents()):
+        for a in infos['action_required']:
+            # Agent performs action only if required
             shortest_path_action = int(observation_builder.get_shortest_path_action(a))
             # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
             # 'network_action' is None if act() returned a random sampled action
@@ -144,14 +132,7 @@ for test in tests:
     
         # Environment step which returns the observations for all agents, their corresponding
         # reward and whether their are done
-    
         next_obs, all_rewards, done, _ = env.step(railenv_action_dict)
-    
-        # Which agents needs to pick and action
-        print("\n The following agents can register an action:")
-        print("========================================")
-        for info in infos['action_required']:
-            print("Agent {} needs to submit an action.".format(info))
     
         env_renderer.render_env(show=True, show_observations=False, show_predictions=False)
         frame_step += 1
