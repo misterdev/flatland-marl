@@ -66,8 +66,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
                 agent_virtual_position = agent.position
             elif agent.status == RailAgentStatus.DONE:
                 agent_virtual_position = agent.target
-            else:
-
+            else:  # agent.status == DONE_REMOVED, prediction must be None
                 prediction = np.zeros(shape=(self.max_depth + 1, 5))
                 for i in range(self.max_depth):
                     prediction[i] = [i, None, None, None, None]
@@ -82,7 +81,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
             shortest_path = shortest_paths[agent.handle]
 
-            # if there is a shortest path, remove the initial position
+            # If there is a shortest path, remove the initial position
             if shortest_path:
                 shortest_path = shortest_path[1:]
 
@@ -90,8 +89,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             new_position = agent_virtual_position
             visited = OrderedSet()
             for index in range(1, self.max_depth + 1):
-                action = 0
-                # if we're at the target or not moving, stop moving until max_depth is reached
+                # If we're at the target or not moving, stop moving until max_depth is reached
                 if new_position == agent.target or not agent.moving or not shortest_path:
                     prediction[index] = [index, *new_position, new_direction, RailEnvActions.STOP_MOVING]
                     visited.add((*new_position, agent.direction))
@@ -104,7 +102,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
                     shortest_path = shortest_path[1:]
 
-                # prediction is ready
+                # Prediction is ready
                 prediction[index] = [index, *new_position, new_direction, 0]
                 # prediction[index] = [index, *new_position, new_direction, action]
                 visited.add((*new_position, new_direction))
@@ -117,7 +115,8 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
     '''
     Given prediction dict for all agents, return sequence of cells walked in the prediction as a dict
-     where key is the agent handle and value is the list of tuples (xi, yi) that are crossed.
+    where key is the agent handle and value is the list of tuples (xi, yi) that are crossed.
+    Mostly used to debug.
     '''
 
     def compute_cells_sequence(self, prediction_dict):

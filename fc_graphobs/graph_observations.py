@@ -14,7 +14,7 @@ from typing import Optional, List, Dict, Tuple
 import queue
 import numpy as np
 from collections import defaultdict
-
+import math
 
 from flatland.core.env import Environment
 from flatland.core.env_observation_builder import ObservationBuilder
@@ -42,8 +42,11 @@ class GraphObsForRailEnv(ObservationBuilder):
         super(GraphObsForRailEnv, self).__init__()
         self.bfs_depth = bfs_depth
         self.predictor = predictor
-        self.prediction_dict = {}
-        
+        self.max_prediction_depth = 0
+        self.prediction_dict = {}  # Dict handle : list of tuples representing prediction steps
+        self.predicted_pos = {}  # Dict ts : int_pos_list
+        self.predicted_pos_coord = {}  # Dict ts : coord_pos_list
+        self.predicted_dir = {}  # Dict ts : dir (float)
 
     def set_env(self, env: Environment):
         super().set_env(env)
@@ -52,31 +55,30 @@ class GraphObsForRailEnv(ObservationBuilder):
             self.predictor.set_env(self.env)
 
     def reset(self):
+        
         pass
 
     def get_many(self, handles: Optional[List[int]] = None) -> {}:
-        observations = {}
+        
         self.prediction_dict = self.predictor.get()
-        if self.predictor:
-            # Useful to check if occupancy is correctly computed
-            self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
-            self.max_prediction_depth = 0
-            self.predicted_pos = {}
-            self.predicted_dir = {}
-            self.predictions = self.predictor.get()
-            if self.predictions:
-                for t in range(self.predictor.max_depth + 1):
-                    pos_list = []
-                    dir_list = []
-                    for a in handles:
-                        if self.predictions[a] is None:
-                            continue
-                        pos_list.append(self.predictions[a][t][1:3])
-                        dir_list.append(self.predictions[a][t][3])
-                    self.predicted_pos.update({t: coordinate_to_position(self.env.width, pos_list)})
-                    self.predicted_dir.update({t: dir_list})
-                self.max_prediction_depth = len(self.predicted_pos)
+        # Useful to check if occupancy is correctly computed
+        self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
 
+        if self.prediction_dict:
+            for t in range(self.predictor.max_depth + 1): # Perché +1?
+                pos_list = []
+                dir_list = []
+                for a in handles:
+                    if self.prediction_dict[a] is None:
+                        continue
+                    pos_list.append(self.prediction_dict[a][t][1:3])
+                    dir_list.append(self.prediction_dict[a][t][3])
+                self.predicted_pos_coord.update({t: pos_list})
+                self.predicted_pos.update({t: coordinate_to_position(self.env.width, pos_list)})
+                self.predicted_dir.update({t: dir_list})
+            self.max_prediction_depth = len(self.predicted_pos)
+                
+        observations = {}
         for a in handles:
             observations[a] = self.get(a)
         return observations
@@ -87,7 +89,7 @@ class GraphObsForRailEnv(ObservationBuilder):
     '''
     def get(self, handle: int = 0) -> {}:
 
-        # TODO For the moment: computes the obs_graph (must be used for search - dunno what to do with it exactly)
+        # TODO For the moment: computes the obs_graph (can be used for path search)
         bfs_graph = self._bfs_graph(handle)
         agents = self.env.agents
         # Debug
@@ -309,12 +311,15 @@ class GraphObsForRailEnv(ObservationBuilder):
     Precondition: 0 <= ts <= self.max_prediction_depth - 1
     '''
     def _possible_conflict(self, handle, ts):
-            # DEBUG errors in position compute
+
             occupancy_counter = 0
-            cell_pos = self.predictor.compute_cells_sequence(self.prediction_dict)[handle][ts]
-            int_pos = coordinate_to_position(self.env.width, [cell_pos])
+            #cell_pos = self.predictor.compute_cells_sequence(self.prediction_dict)[handle][ts]
+            #int_pos = coordinate_to_position(self.env.width, [cell_pos])
+            cell_pos = self.predicted_pos_coord[ts][handle]
+            int_pos = self.predicted_pos[ts][handle]
             pre_ts = max(0, ts - 1)
             post_ts = min(self.max_prediction_depth - 1, ts + 1)
+            val = self.predicted_dir[ts][handle]
             int_direction = int(self.predicted_dir[ts][handle])
             cell_transitions = self.env.rail.get_transitions(int(cell_pos[0]), int(cell_pos[1]), int_direction)
 
@@ -353,8 +358,9 @@ class GraphObsForRailEnv(ObservationBuilder):
         occupancy = np.zeros(self.max_prediction_depth - 1)
 
         for ts in range(0, self.max_prediction_depth - 1):
-            occupancy[ts] = self._possible_conflict(handle, ts)
-            
+            if self.env.agents[handle].status != RailAgentStatus.DONE_REMOVED:
+                occupancy[ts] = self._possible_conflict(handle, ts)
+        # Occupancy is 0 for agents that were removed (doesn't matter because they don't perform actions anymore)
         return occupancy
     
     '''
