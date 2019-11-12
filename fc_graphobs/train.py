@@ -103,6 +103,7 @@ def main():
 
         score = 0
         env_done = 0
+
         # Pick first action
         for a in range(env.get_num_agents()):
             shortest_path_action = observation_builder.get_shortest_path_action(a)
@@ -143,11 +144,11 @@ def main():
             # Normalize obs TODO
             for a in range(env.get_num_agents()):
                 agent_next_obs[a] = next_obs[a]
-                if done[a]:
-                    
+                if done[a]:             
                     final_obs[a] = agent_obs[a].copy()
                     final_obs_next[a] = agent_next_obs[a].copy()
                     final_action_dict.update({a: network_action_dict[a]})
+                    
                 else:
                     agent.step(agent_obs[a], network_action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
 
@@ -160,31 +161,37 @@ def main():
                 for a in range(env.get_num_agents()):
                     agent.step(final_obs[a], final_action_dict[a], all_rewards[a], final_obs_next[a], done[a])
                 break
+        
+        # At the end of the episode
+        eps = max(eps_end, eps_decay * eps)  # Decrease epsilon
+        # Metrics
+        done_window.append(env_done)
+        num_agents_done = 0  # Num of agents that reached their target
+        for a in range(env.get_num_agents()):
+            if done[a]:
+                num_agents_done += 1
 
+        scores_window.append(score / max_steps)  # Save most recent score
+        scores.append(np.mean(scores_window))
+        dones_list.append((np.mean(done_window)))
 
-            # Metrics TODO Differentiate between dones as percentage agent/num_agents and env_dones
-            done_window.append(env_done)
-            scores_window.append(score / max_steps)  # Save most recent score
-            scores.append(np.mean(scores_window))
-            dones_list.append((np.mean(done_window)))
-            # Epsilon decay
-            eps = max(eps_end, eps_decay * eps)  # Decrease epsilon
-            action_prob_float = action_prob / np.sum(action_prob)
-            formatted_action_prob = ['{:.5f}'.format(ap) for ap in action_prob_float]
+        action_prob_float = action_prob / np.sum(action_prob)
+        formatted_action_prob = ['{:.5f}'.format(ap) for ap in action_prob_float]
 
-            # Print training results info
-            print(
-                '\r{} Agents on ({},{}).\t Ep: {}\t Avg Score: {:.3f}\t Env Dones: {:.2f}%\t Eps: {:.2f}\t Action Probs: {} '.format(
-                    env.get_num_agents(), width, height,
-                    ep,
-                    np.mean(scores_window),
-                    100 * np.mean(done_window),
-                    eps,
-                    formatted_action_prob), end=" ")
+        # Print training results info
+        print(
+            '\r{} Agents on ({},{}).\t Ep: {}\t Avg Score: {:.3f}\t Env Dones so far: {:.2f}%\t Done Agents in ep: {:.2f}%\t Eps: {:.2f}\t Action Probs: {} '.format(
+                env.get_num_agents(), width, height,
+                ep,
+                np.mean(scores_window),
+                100 * np.mean(done_window),
+                100 * (num_agents_done/nr_trains),
+                eps,
+                formatted_action_prob), end=" ")
 
-            if ep % 10 == 0:
-                torch.save(agent.qnetwork_local.state_dict(),'./nets/avoid_checkpoint' + str(ep) + '.pth')
-                action_prob = [1] * railenv_action_size
+        if ep % 100 == 0:
+            torch.save(agent.qnetwork_local.state_dict(),'./nets/avoid_checkpoint' + str(ep) + '.pth')
+            action_prob = [1] * railenv_action_size
 
     plt.plot(scores)
     plt.show()
