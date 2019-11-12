@@ -71,11 +71,12 @@ class Agent:
                     self.learn(experiences, GAMMA)
 
     '''
-    Works with action size = 2,
-    if action value index = 0, follow shortest path
-    if action value index = 1, stop the agent.
+    Works with network_action size = 2 and rail_env_action size = 5,
+    if network_action value index = 0, follow shortest path (use RailEnvActions)
+    if network_action value index = 1, stop the agent.
 
-    Else, if random action with eps-greedy policy was chosen, take a random action from the RailEnvActions dict.
+    Else, if random action with eps-greedy policy was chosen, take a random sample
+    from network_actions, so stop or follow shortest path.
     '''
     def act(self, state, shortest_path_action, eps=0.):
         """Returns actions for given state as per current policy.
@@ -94,20 +95,17 @@ class Agent:
         # Epsilon-greedy action selection
         if random.random() > eps:
             network_action = np.argmax(action_values.cpu().data.numpy())
-            if network_action == 1:
-                railenv_action = RailEnvActions.STOP_MOVING  # Stop the agent
-                return railenv_action, network_action
+            if network_action == 1: # Stop the agent
+                return RailEnvActions.STOP_MOVING, network_action
             else:
                 # Pick action according to shortest path
-                railenv_action = shortest_path_action  # TODO
-                return railenv_action, network_action
+                return shortest_path_action, network_action
         else:
-            network_action = random.choice(np.arange(2))
-            railenv_action = shortest_path_action # TODO
+            network_action = random.choice(np.arange(2))  # Choose randomly whether to stop or follow s.p.
             if network_action == 1:
-                return RailEnvActions.STOP_MOVING, 1 # Stop, stop
-            else: # Should return shortest
-                return railenv_action, 0  # Choose from five possible actions available randomly
+                return RailEnvActions.STOP_MOVING, network_action # Stop, stop
+            else:
+                return shortest_path_action, network_action
 
     def learn(self, experiences, gamma):
 
