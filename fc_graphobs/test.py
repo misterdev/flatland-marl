@@ -1,5 +1,7 @@
 import torch
 import sys
+import time
+
 # First of all we import the Flatland rail environment
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator, complex_rail_generator, rail_from_file
@@ -16,7 +18,6 @@ from fc_graphobs.predictions import ShortestPathPredictorForRailEnv
 from fc_graphobs.dueling_double_dqn_mod import Agent
 from fc_graphobs.print_info import print_info
 import fc_graphobs.nets
-import time
 
 from configobj import ConfigObj
 
@@ -26,6 +27,8 @@ sys.path.append(str(base_dir))
 config = ConfigObj("./tests-config.ini")
 tests = config.sections
 n_tests = len(tests)
+
+
 
 '''
 width = 60
@@ -65,7 +68,7 @@ score = 0
 frame_step = 0
 
 # Here you can pre-load an agent
-with path(fc_graphobs.nets, "avoid_checkpoint40.pth") as file_in:
+with path(fc_graphobs.nets, "avoid_checkpoint300.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
 
 for test in tests:
