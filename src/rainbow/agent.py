@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch import optim
 
-from fc_graphobs.rainbow.model import DQN
+from src.rainbow.model import DQN
 
 
 class RainbowAgent():

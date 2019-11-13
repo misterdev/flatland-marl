@@ -27,8 +27,8 @@ from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_
 from flatland.core.grid.grid4_utils import get_new_position
 from flatland.core.grid.grid_utils import coordinate_to_position
 
-from fc_graphobs.draw_obs_graph import build_graph
-from fc_graphobs.utils import assign_random_priority, assign_speed_priority
+from src.draw_obs_graph import build_graph
+from src.utils import assign_random_priority, assign_speed_priority
 
 
 class GraphObsForRailEnv(ObservationBuilder):

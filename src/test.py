@@ -13,11 +13,11 @@ from flatland.envs.malfunction_generators import malfunction_from_params
 # make sure the root path is in system path
 from pathlib import Path
 from importlib_resources import path
-from fc_graphobs.graph_observations import GraphObsForRailEnv
-from fc_graphobs.predictions import ShortestPathPredictorForRailEnv
-from fc_graphobs.dueling_double_dqn_mod import Agent
-from fc_graphobs.print_info import print_info
-import fc_graphobs.nets
+from src.graph_observations import GraphObsForRailEnv
+from src.predictions import ShortestPathPredictorForRailEnv
+from src.dueling_double_dqn_mod import Agent
+from src.print_info import print_info
+import src.nets
 
 from configobj import ConfigObj
 
@@ -68,7 +68,7 @@ score = 0
 frame_step = 0
 
 # Here you can pre-load an agent
-with path(fc_graphobs.nets, "avoid_checkpoint300.pth") as file_in:
+with path(src.nets, "avoid_checkpoint300.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
 
 for test in tests:

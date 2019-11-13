@@ -3,43 +3,34 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import sys
+import argparse
 # make sure the root path is in system path
 from pathlib import Path
-base_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(base_dir))
-
 
 from flatland.envs.rail_env import RailEnv
-from flatland.envs.rail_generators import sparse_rail_generator, complex_rail_generator
+from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
 from flatland.envs.malfunction_generators import malfunction_from_params
 
-# We also include a renderer because we want to visualize what is going on in the environment
-
-from fc_graphobs.graph_observations import GraphObsForRailEnv
-from fc_graphobs.predictions import ShortestPathPredictorForRailEnv
+from src.graph_observations import GraphObsForRailEnv
+from src.local_observations import LocalObsForRailEnv
+from src.predictions import ShortestPathPredictorForRailEnv
 
 # I can import files from the other folder
-from fc_graphobs.dueling_double_dqn_mod import Agent
-from fc_graphobs.print_info import print_info
+from src.dueling_double_dqn_mod import Agent as ModAgent
+from src.dueling_double_dqn import Agent
+from src.print_info import print_info
 
+base_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(base_dir))
 
-def main():
+def main(args):
 
-    width = 50  # Width of map
-    height = 50  # Height of map
-    nr_trains = 10  # Number of trains that have an assigned task in the env
-    cities_in_map = 6  # Number of cities where agents can start or end
-    seed = 5  # Random seed
-    grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
-    max_rails_between_cities = 4  # Max number of tracks allowed between cities. This is number of entry point to a city
-    max_rail_in_city = 6  # Max number of parallel tracks within a city, representing a realistic train station
-
-    rail_generator = sparse_rail_generator(max_num_cities=cities_in_map,
-                                           seed=seed,
-                                           grid_mode=grid_distribution_of_cities,
-                                           max_rails_between_cities=max_rails_between_cities,
-                                           max_rails_in_city=max_rail_in_city,
+    rail_generator = sparse_rail_generator(max_num_cities=args.max_num_cities,
+                                           seed=args.seed,
+                                           grid_mode=args.grid_mode,
+                                           max_rails_between_cities=args.max_rails_between_cities,
+                                           max_rails_in_city=args.max_rails_in_city,
                                            )
     # Maps speeds to % of appearance in the env
     speed_ration_map = {1.: 0.25,  # Fast passenger train
@@ -50,31 +41,40 @@ def main():
     schedule_generator = sparse_schedule_generator(speed_ration_map)
 
     stochastic_data = {
-        'malfunction_rate': 500,  # Rate of malfunction occurrence of single agent
-        'min_duration': 20,  # Minimal duration of malfunction
-        'max_duration': 21  # Max duration of malfunction
+        'malfunction_rate': args.malfunction_rate,  # Rate of malfunction occurrence of single agent
+        'min_duration': args.min_duration,  # Minimal duration of malfunction
+        'max_duration': args.max_duration  # Max duration of malfunction
         }
+    
+    if args.observation_builder == 'GraphObsForRailEnv':
+        
+        prediction_depth = args.prediction_depth
+        bfs_depth = args.bfs_depth
+        observation_builder = GraphObsForRailEnv(bfs_depth=bfs_depth, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
+        state_size = args.prediction_depth + 3
+        network_action_size = 2  # {follow path, stop}
+        railenv_action_size = 5  # The RailEnv possible actions
+        agent = ModAgent(state_size=state_size, action_size=network_action_size)
 
-    prediction_depth = 40
-    bfs_depth = 4
-    observation_builder = GraphObsForRailEnv(bfs_depth=bfs_depth, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
+    elif args.observation_builder == 'LocalObsForRailEnv':
+        observation_builder = LocalObsForRailEnv(args.view_semiwidth, args.view_height, args.offset)
+        state_size = (2 * args.view_semiwidth + 1) * args.height  # TODO
+        action_size = 5
+        agent = Agent(state_size, action_size)
 
     # Construct the environment with the given observation, generators, predictors, and stochastic data
-    env = RailEnv(width=width,
-                  height=height,
+    env = RailEnv(width=args.width,
+                  height=args.height,
                   rail_generator=rail_generator,
                   schedule_generator=schedule_generator,
-                  number_of_agents=nr_trains,
+                  number_of_agents=args.num_agents,
                   obs_builder_object=observation_builder,
                   malfunction_generator_and_process_data=malfunction_from_params(stochastic_data),
                   remove_agents_at_target=True)
     env.reset()
     # Hardcoded params
-    state_size = prediction_depth + 3
-    network_action_size = 2  # {follow path, stop}
-    railenv_action_size = 5  # The RailEnv possible actions
-    n_episodes = 300
-    max_steps = int(4 * 2 * (width + height + nr_trains/cities_in_map))
+
+    max_steps = int(4 * 2 * (args.width + args.height + 20))  # TODO Change
     eps = 1.
     eps_end = 0.005
     eps_decay = 0.99995
@@ -90,10 +90,9 @@ def main():
     agent_obs = [None] * env.get_num_agents()
     agent_next_obs = [None] * env.get_num_agents()
 
-    agent = Agent(state_size=state_size, action_size=network_action_size, double_dqn=True)
 
-    for ep in range(1, n_episodes + 1):
-        obs, info = env.reset(True, True)
+    for ep in range(1, args.n_episodes + 1):
+        obs, info = env.reset()
         final_obs = agent_obs.copy()
         final_obs_next = agent_next_obs.copy()
 
@@ -181,11 +180,11 @@ def main():
         # Print training results info
         print(
             '\r{} Agents on ({},{}).\t Ep: {}\t Avg Score: {:.3f}\t Env Dones so far: {:.2f}%\t Done Agents in ep: {:.2f}%\t Eps: {:.2f}\t Action Probs: {} '.format(
-                env.get_num_agents(), width, height,
+                env.get_num_agents(), args.width, args.height,
                 ep,
                 np.mean(scores_window),
                 100 * np.mean(done_window),
-                100 * (num_agents_done/nr_trains),
+                100 * (num_agents_done/args.num_agents),
                 eps,
                 formatted_action_prob), end=" ")
 
@@ -196,7 +195,7 @@ def main():
                     ep,
                     np.mean(scores_window),
                     100 * np.mean(done_window),
-                    100 * (num_agents_done/nr_trains),
+                    100 * (num_agents_done/args.num_agents),
                     eps,
                     formatted_action_prob))
             torch.save(agent.qnetwork_local.state_dict(),'./nets/avoid_checkpoint' + str(ep) + '.pth')
@@ -207,4 +206,36 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+
+    parser = argparse.ArgumentParser(description='Flatland')
+    # Flatland parameters
+    parser.add_argument('--width', type=int, default=50, help='Environment width')
+    parser.add_argument('--height', type=int, default=50, help='Environment height')
+    parser.add_argument('--num_agents', type=int, default=10, help='Number of agents in the environment')
+    parser.add_argument('--max_num_cities', type=int, default=6, help='Maximum number of cities where agents can start or end')
+    parser.add_argument('--seed', type=int, default=1, help='Seed used to generate grid environment randomly')
+    parser.add_argument('--grid_mode', type=bool, default=False, help='Type of city distribution, if False cities are randomly placed')
+    parser.add_argument('--max_rails_between_cities', type=int, default=4, help='Max number of tracks allowed between cities, these count as entry points to a city')
+    parser.add_argument('--max_rails_in_city', type=int, default=6, help='Max number of parallel tracks within a city allowed')
+    parser.add_argument('--malfunction_rate', type=int, default=500, help='Rate of malfunction occurrence of single agent')
+    parser.add_argument('--min_duration', type=int, default=20, help='Min duration of malfunction')
+    parser.add_argument('--max_duration', type=int, default=30, help='Max duration of malfunction')
+    parser.add_argument('--observation_builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
+    parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
+    parser.add_argument('--bfs_depth', type=int, default=4, help='BFS depth of the graph observation')
+    parser.add_argument('--prediction_depth', type=int, default=40, help='Prediction depth for shortest path strategy, i.e. length of a path')
+    parser.add_argument('--view_semiwidth', type=int, default=10, help='Semiwidth of field view for agent in local obs')
+    parser.add_argument('--view_height', type=int, default=20, help='Height of the field view for agent in local obs')
+    parser.add_argument('--offset', type=int, default=20, help='Offset of agent in local obs')
+    # Training parameters
+    parser.add_argument('--n_episodes', type=int, default=1000, help='Number of episodes on which to train the agents')
+    # DDQN hyperparameters
+    
+    args = parser.parse_args()
+    # Check arguments
+    if args.offset > args.height:
+        raise ValueError("Agent offset can't be greater than view height in local obs")
+    if args.offset < 0:
+        raise ValueError("Agent offset must be a positive integer")
+    
+    main(args)

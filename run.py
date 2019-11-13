@@ -7,10 +7,10 @@ from importlib_resources import path
 
 from flatland.evaluators.client import FlatlandRemoteClient  # For evaluation
 
-from fc_graphobs.graph_observations import GraphObsForRailEnv
-from fc_graphobs.predictions import ShortestPathPredictorForRailEnv
-from fc_graphobs.dueling_double_dqn_mod import Agent
-import fc_graphobs.nets
+from src.graph_observations import GraphObsForRailEnv
+from src.predictions import ShortestPathPredictorForRailEnv
+from src.dueling_double_dqn_mod import Agent
+import src.nets
 
 base_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(base_dir))
@@ -27,7 +27,7 @@ controller = Agent(state_size, network_action_size)
 railenv_action_dict = dict()
 
 
-with path(fc_graphobs.nets, "avoid_checkpoint300.pth") as file_in:
+with path(src.nets, "avoid_checkpoint300.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
     
 evaluation_number = 0

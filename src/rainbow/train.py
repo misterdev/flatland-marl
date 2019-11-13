@@ -16,12 +16,12 @@ from flatland.envs.schedule_generators import sparse_schedule_generator
 # We also include a renderer because we want to visualize what is going on in the environment
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 
-from fc_graphobs.graph_observations import GraphObsForRailEnv
-from fc_graphobs.predictions import ShortestPathPredictorForRailEnv
+from src.graph_observations import GraphObsForRailEnv
+from src.predictions import ShortestPathPredictorForRailEnv
 
-from fc_graphobs.rainbow.agent import RainbowAgent
-from fc_graphobs.rainbow.memory import ReplayMemory
-from fc_graphobs.rainbow.test import test
+from src.rainbow.agent import RainbowAgent
+from src.rainbow.memory import ReplayMemory
+from src.rainbow.test import test
 
 
 # TODO Add also all the parameters related to the Flatland environment, maybe use gin-config
