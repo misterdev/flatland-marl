@@ -6,6 +6,9 @@ import sys
 import argparse
 # make sure the root path is in system path
 from pathlib import Path
+# These 2 lines must go before the import from src/
+base_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(base_dir))
 
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
@@ -21,8 +24,7 @@ from src.dueling_double_dqn_mod import Agent as ModAgent
 from src.dueling_double_dqn import Agent
 from src.print_info import print_info
 
-base_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(base_dir))
+
 
 def main(args):
 
@@ -140,7 +142,7 @@ def main(args):
             for info in infos['action_required']:
                 print("Agent {} needs to submit an action.".format(info))
             '''
-            # Normalize obs TODO
+
             for a in range(env.get_num_agents()):
                 agent_next_obs[a] = next_obs[a]
                 if done[a]:             
@@ -209,17 +211,17 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Flatland')
     # Flatland parameters
-    parser.add_argument('--width', type=int, default=50, help='Environment width')
-    parser.add_argument('--height', type=int, default=50, help='Environment height')
-    parser.add_argument('--num_agents', type=int, default=10, help='Number of agents in the environment')
+    parser.add_argument('--width', type=int, default=100, help='Environment width')
+    parser.add_argument('--height', type=int, default=100, help='Environment height')
+    parser.add_argument('--num_agents', type=int, default=50, help='Number of agents in the environment')
     parser.add_argument('--max_num_cities', type=int, default=6, help='Maximum number of cities where agents can start or end')
     parser.add_argument('--seed', type=int, default=1, help='Seed used to generate grid environment randomly')
     parser.add_argument('--grid_mode', type=bool, default=False, help='Type of city distribution, if False cities are randomly placed')
     parser.add_argument('--max_rails_between_cities', type=int, default=4, help='Max number of tracks allowed between cities, these count as entry points to a city')
     parser.add_argument('--max_rails_in_city', type=int, default=6, help='Max number of parallel tracks within a city allowed')
-    parser.add_argument('--malfunction_rate', type=int, default=500, help='Rate of malfunction occurrence of single agent')
+    parser.add_argument('--malfunction_rate', type=int, default=1000, help='Rate of malfunction occurrence of single agent')
     parser.add_argument('--min_duration', type=int, default=20, help='Min duration of malfunction')
-    parser.add_argument('--max_duration', type=int, default=30, help='Max duration of malfunction')
+    parser.add_argument('--max_duration', type=int, default=50, help='Max duration of malfunction')
     parser.add_argument('--observation_builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
     parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
     parser.add_argument('--bfs_depth', type=int, default=4, help='BFS depth of the graph observation')
