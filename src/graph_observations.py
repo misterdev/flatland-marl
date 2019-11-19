@@ -23,7 +23,7 @@ from flatland.utils.ordered_set import OrderedSet
 from flatland.envs.agent_utils import RailAgentStatus
 from flatland.envs.distance_map import DistanceMap
 from flatland.envs.rail_env import RailEnvNextAction, RailEnvActions
-from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_
+from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_, get_action_for_move
 from flatland.core.grid.grid4_utils import get_new_position
 from flatland.core.grid.grid_utils import coordinate_to_position
 
@@ -138,7 +138,7 @@ class GraphObsForRailEnv(ObservationBuilder):
     - if agent status == DONE => agent does nothing.
     '''
     # TODO Stop when shortest_path() says that rail is disrupted 
-    def get_shortest_path_action(self, handle):
+    def _get_shortest_path_action(self, handle):
 
         agent = self.env.agents[handle]
 
@@ -152,8 +152,13 @@ class GraphObsForRailEnv(ObservationBuilder):
             if shortest_paths[handle] is None:  # Railway disrupted
                 action = RailEnvActions.STOP_MOVING
             else:
-                step = shortest_paths[handle][0]
-                next_action_element = step[2][0]  # Get next_action_element
+                next_direction = shortest_paths[handle][1].direction
+                next_position = shortest_paths[handle][1].position # COULD return None?
+                action = get_action_for_move(agent.position, agent.direction, next_position, next_direction, self.env.rail)
+                
+                if action is None:
+                    action = RailEnvActions.DO_NOTHING
+                '''
                 # Just to use the correct form/name
                 if next_action_element == 1:
                     action = RailEnvActions.MOVE_LEFT
@@ -161,11 +166,21 @@ class GraphObsForRailEnv(ObservationBuilder):
                     action = RailEnvActions.MOVE_FORWARD
                 elif next_action_element == 3:
                     action = RailEnvActions.MOVE_RIGHT
-
+                '''
         else:  # If status == DONE
             action = RailEnvActions.DO_NOTHING
 
         return action
+    
+    
+    def choose_railenv_action(self, handle, network_action):
+        
+        shortest_path_action = self._get_shortest_path_action(handle)     
+        if network_action == 1:
+            return RailEnvActions.STOP_MOVING
+        else:
+            return shortest_path_action
+        
     
     '''
     Build a graph (dict) of nodes, where nodes are identified by ids, graph is directed, depends on agent direction

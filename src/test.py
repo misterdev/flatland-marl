@@ -12,6 +12,9 @@ from flatland.envs.malfunction_generators import malfunction_from_params
 
 # make sure the root path is in system path
 from pathlib import Path
+base_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(base_dir))
+
 from importlib_resources import path
 from src.graph_observations import GraphObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
@@ -21,14 +24,9 @@ import src.nets
 
 from configobj import ConfigObj
 
-base_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(base_dir))
-
 config = ConfigObj("./tests-config.ini")
 tests = config.sections
 n_tests = len(tests)
-
-
 
 '''
 width = 60
@@ -38,7 +36,7 @@ cities_in_map = 4  # Number of cities where agents can start or end
 max_rails_between_cities = 2  # Max number of tracks allowed between cities. This is number of entry point to a city
 max_rail_in_cities = 3  # Max number of parallel tracks within a city, representing a realistic train station
 '''
-seed = 2  # Random seed
+seed = 5  # Random seed
 grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
 init_render_env = True # True if RenderEnv must be initialized
 
@@ -93,7 +91,6 @@ for test in tests:
                         'max_duration': config[test].as_int('max_duration')  # Max duration of malfunction
                         }),
                   remove_agents_at_target=True)
-    
     if init_render_env:
         # Initiate the renderer
         env_renderer = RenderTool(env, gl="PILSVG",

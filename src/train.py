@@ -13,7 +13,7 @@ sys.path.append(str(base_dir))
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
-from flatland.envs.malfunction_generators import malfunction_from_params
+from flatland.envs.malfunction_generators import malfunction_from_params, MalfunctionParameters
 
 from src.graph_observations import GraphObsForRailEnv
 from src.local_observations import LocalObsForRailEnv
@@ -42,11 +42,11 @@ def main(args):
 
     schedule_generator = sparse_schedule_generator(speed_ration_map)
 
-    stochastic_data = {
-        'malfunction_rate': args.malfunction_rate,  # Rate of malfunction occurrence of single agent
-        'min_duration': args.min_duration,  # Minimal duration of malfunction
-        'max_duration': args.max_duration  # Max duration of malfunction
-        }
+    stochastic_data = MalfunctionParameters(
+        malfunction_rate=args.malfunction_rate,  # Rate of malfunction occurrence of single agent
+        min_duration=args.min_duration,  # Minimal duration of malfunction
+        max_duration=args.max_duration  # Max duration of malfunction
+    )
     
     if args.observation_builder == 'GraphObsForRailEnv':
         
@@ -105,18 +105,20 @@ def main(args):
         score = 0
         env_done = 0
 
-        # Pick first action
+        # Pick first action - need to separate to use 'action_required' in the next step
         for a in range(env.get_num_agents()):
-            shortest_path_action = observation_builder.get_shortest_path_action(a)
             # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
-            # 'network_action' is None if act() returned a random sampled action
-            railenv_action, network_action = agent.act(agent_obs[a], shortest_path_action, eps=eps)
+            network_action = agent.act(agent_obs[a], eps=eps)
+            # Pick railenv action according to network decision if it's safe to go or to stop
+            railenv_action = observation_builder.choose_railenv_action(a, network_action)
+            # Update action dicts
             action_prob[railenv_action] += 1
             railenv_action_dict.update({a: railenv_action})
             network_action_dict.update({a: network_action})
 
         # Environment step
         next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
+        
         for step in range(max_steps - 1):
 
             # Logging
@@ -124,13 +126,14 @@ def main(args):
 
             for a in infos['action_required']:
                 # Agent performs action only if required
-                    shortest_path_action = observation_builder.get_shortest_path_action(a)
-                    # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
-                    # 'network_action' is None if act() returned a random sampled action
-                    railenv_action, network_action = agent.act(agent_obs[a], shortest_path_action, eps=eps)
-                    action_prob[railenv_action] += 1
-                    railenv_action_dict.update({a: railenv_action})
-                    network_action_dict.update({a: network_action})
+                # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
+                network_action = agent.act(agent_obs[a], eps=eps)
+                # Pick railenv action according to network decision if it's safe to go or to stop
+                railenv_action = observation_builder.choose_railenv_action(a, network_action)
+                # Update action dicts
+                action_prob[railenv_action] += 1
+                railenv_action_dict.update({a: railenv_action})
+                network_action_dict.update({a: network_action})
 
             # Environment step
             next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
