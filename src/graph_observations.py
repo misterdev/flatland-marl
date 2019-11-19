@@ -85,10 +85,10 @@ class GraphObsForRailEnv(ObservationBuilder):
 
     '''
     Returns obs for one agent, obs are a single array of concatenated values representing:
-    - occupancy, 
-    - 
-    - 
-    - 
+    - occupancy of next prediction_depth cells,, 
+    - agent priority/speed,
+    - number of malfunctioning agents (encountered),
+    - number of agents that are ready to depart (encountered).
     '''
     # TODO At the moment bfs_graph is not used (but can be used for path search if shortest path strategy fails)
     # TODO We may need some normalization depending on the type of data that the part of obs represents
@@ -97,7 +97,7 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         bfs_graph = self._bfs_graph(handle)
         agents = self.env.agents
-        # Debug - Visualize paths that are overlapping (use graph tool?) or print to file
+        # Debug - Visualize paths that are overlapping
         '''
         for a in agents:
             print(str(a.handle) + ": ", end='')
@@ -115,7 +115,7 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         # Malfunctioning obs: malfunction, malfunction_rate, next_malfunction, nr_malfunctions
         # Counting number of agents that are currently malfunctioning (globally) - experimental
-        n_agents_malfunctioning = 0
+        n_agents_malfunctioning = 0  # in TreeObs they store the length of the longest malfunction encountered
         for a in agents:
             if a.malfunction_data['malfunction'] != 0:
                 n_agents_malfunctioning += 1  # Considering ALL agents
@@ -172,7 +172,9 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         return action
     
-    
+    '''
+    Choose action to perform from RailEnvActions, namely follow shortest path or stop if DQN network said so.
+    '''
     def choose_railenv_action(self, handle, network_action):
         
         shortest_path_action = self._get_shortest_path_action(handle)     

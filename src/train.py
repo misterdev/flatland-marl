@@ -61,8 +61,8 @@ def main(args):
     elif args.observation_builder == 'LocalObsForRailEnv':
         observation_builder = LocalObsForRailEnv(args.view_semiwidth, args.view_height, args.offset)
         state_size = (2 * args.view_semiwidth + 1) * args.height  # TODO
-        action_size = 5
-        agent = Agent(state_size, action_size)
+        railenv_action_size = 5
+        agent = Agent(state_size, railenv_action_size)
 
     # Construct the environment with the given observation, generators, predictors, and stochastic data
     env = RailEnv(width=args.width,
@@ -92,7 +92,6 @@ def main(args):
     agent_obs = [None] * env.get_num_agents()
     agent_next_obs = [None] * env.get_num_agents()
 
-
     for ep in range(1, args.n_episodes + 1):
         obs, info = env.reset()
         final_obs = agent_obs.copy()
@@ -107,15 +106,22 @@ def main(args):
 
         # Pick first action - need to separate to use 'action_required' in the next step
         for a in range(env.get_num_agents()):
-            # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
-            network_action = agent.act(agent_obs[a], eps=eps)
-            # Pick railenv action according to network decision if it's safe to go or to stop
-            railenv_action = observation_builder.choose_railenv_action(a, network_action)
-            # Update action dicts
-            action_prob[railenv_action] += 1
-            railenv_action_dict.update({a: railenv_action})
-            network_action_dict.update({a: network_action})
-
+            
+            if args.observation_builder == 'GraphObsForRailEnv':
+                # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
+                network_action = agent.act(agent_obs[a], eps=eps)
+                # Pick railenv action according to network decision if it's safe to go or to stop
+                railenv_action = observation_builder.choose_railenv_action(a, network_action)
+                # Update action dicts
+                action_prob[railenv_action] += 1
+                railenv_action_dict.update({a: railenv_action})
+                network_action_dict.update({a: network_action})
+                
+            elif args.observation_builder == 'LocalObsForRailEnv':
+                railenv_action = agent.act(agent_obs[a], eps=eps)
+                action_prob[railenv_action] += 1
+                railenv_action_dict.update({a: railenv_action})
+                
         # Environment step
         next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
         
@@ -126,14 +132,20 @@ def main(args):
 
             for a in infos['action_required']:
                 # Agent performs action only if required
-                # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
-                network_action = agent.act(agent_obs[a], eps=eps)
-                # Pick railenv action according to network decision if it's safe to go or to stop
-                railenv_action = observation_builder.choose_railenv_action(a, network_action)
-                # Update action dicts
-                action_prob[railenv_action] += 1
-                railenv_action_dict.update({a: railenv_action})
-                network_action_dict.update({a: network_action})
+                if args.observation_builder == 'GraphObsForRailEnv':
+                    # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
+                    network_action = agent.act(agent_obs[a], eps=eps)
+                    # Pick railenv action according to network decision if it's safe to go or to stop
+                    railenv_action = observation_builder.choose_railenv_action(a, network_action)
+                    # Update action dicts
+                    action_prob[railenv_action] += 1
+                    railenv_action_dict.update({a: railenv_action})
+                    network_action_dict.update({a: network_action})
+
+                elif args.observation_builder == 'LocalObsForRailEnv':
+                    railenv_action = agent.act(agent_obs[a], eps=eps)
+                    action_prob[railenv_action] += 1
+                    railenv_action_dict.update({a: railenv_action})
 
             # Environment step
             next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
@@ -151,10 +163,14 @@ def main(args):
                 if done[a]:             
                     final_obs[a] = agent_obs[a].copy()
                     final_obs_next[a] = agent_next_obs[a].copy()
-                    final_action_dict.update({a: network_action_dict[a]})
+                    if args.observation_builder == 'GraphObsForRailEnv':
+                        final_action_dict.update({a: network_action_dict[a]})
                     
                 else:
-                    agent.step(agent_obs[a], network_action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
+                    if args.observation_builder == 'GraphObsForRailEnv':
+                        agent.step(agent_obs[a], network_action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
+                    elif args.observation_builder == 'LocalObsForRailEnv':
+                        agent.step(agent_obs[a], railenv_action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
 
                 score += all_rewards[a] / env.get_num_agents()  # Update score
 

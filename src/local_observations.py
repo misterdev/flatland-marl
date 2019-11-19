@@ -22,15 +22,15 @@ class LocalObsForRailEnv(ObservationBuilder):
     Gives a local observation of the rail environment around the agent.
     The observation is composed of the following elements:
 
-    - rail_obs, transition map array with dimensions (view_height, 2 * view_semiwidth + 1, 16),\
+    - local_rail_obs, transition map array with dimensions (view_height, 2 * view_semiwidth + 1, 16),\
     assuming 16 bits encoding of transitions (one-hot encoding)
 
     - agents_state_obs: np.array of shape (view_height, 2 * view_semiwidth + 1, 5) with
         - first channel containing the agent position and direction (int on grid)
-        - second channel containing the other agents positions and direction (int on grid)
-        - third channel containing agent/other agent malfunctions
+        - second channel containing active agents positions and direction (int on grid)
+        - third channel containing agent/other agent malfunctions (int, duration)
         - fourth channel containing agent/other agent fractional speeds (float)
-        - fifth channel containing number of other agents ready to depart (int on grid in correspondence to starting position)
+        - fifth channel containing directions of agents ready to depart (flag in correspondence to initial position)
 
     - targets_obs: np.array of shape (view_height, 2 * view_semiwidth + 1, 2) containing respectively the position of the given agent\
      target/subtarget and the positions of the other agents targets/subtargets (flag only, no counter!). one-hot encoding.
@@ -42,7 +42,7 @@ class LocalObsForRailEnv(ObservationBuilder):
     at the upper-left corner (as in the Flatland grid env).
     The offset parameter moves the agent along the height axis of this rectangle, 0 <= offset <= view_height.
     If equal to view_height the agent only has observation in front of it, if equal to 0 the agent has only observation 
-     behind.
+    behind.
     """
     def __init__(self, view_semiwidth, view_height, offset):
 
@@ -51,28 +51,29 @@ class LocalObsForRailEnv(ObservationBuilder):
         self.view_width = 2 * self.view_semiwidth + 1
         self.view_height = view_height
         self.offset = offset  # Agent offset along axis of the agent's direction
-        self.rail_obs = np.zeros((self.view_width, self.view_height, 16))
-        self.agents_state_obs = np.zeros((self.view_width, self.view_height, 5))
-        self.targets_obs = np.zeros((self.view_width, self.view_height, 2))
+        self.rail_obs = None
+        self.targets_obs = None
 
     def set_env(self, env: Environment):
         super().set_env(env)
 
     def reset(self):
-        
-        pass
-        # Compute from agent actual position
-        '''
-        for i in range(self.view_height):
-            for j in range(self.view_width):
+        # Useful for precomputing stuff - at the beginning of an episode
+        # Precompute rail_obs of ALL env - then compute local rail obs from this
+        self.rail_obs = np.zeros((self.env.height, self.env.width, 16))  # Transition map of the whole env
+        for i in range(self.env.height):
+            for j in range(self.env.width):
                 bitlist = [int(digit) for digit in bin(self.env.rail.get_full_transitions(i, j))[2:]]
                 bitlist = [0] * (16 - len(bitlist)) + bitlist
                 self.rail_obs[i, j] = np.array(bitlist)
-        '''
+        # Global targets - not subtargets
+        self.targets_obs = np.zeros((self.view_height, self.view_width, 2))
 
-    def get(self, handle: int = 0) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+
+    def get(self, handle: int = 0) -> (np.ndarray, np.ndarray, np.ndarray):
         
-        agent = self.env.agents[handle]
+        agents = self.env.agents
+        agent = agents[handle]
         
         if agent.status == RailAgentStatus.READY_TO_DEPART:
             agent_virtual_position = agent.initial_position
@@ -84,28 +85,61 @@ class LocalObsForRailEnv(ObservationBuilder):
             return None
             
         # Compute field of view
-        visible_cells = self._field_of_view(agent_virtual_position, agent.direction)
+        visible_cells, rel_coords = self._field_of_view(agent_virtual_position, agent.direction)
         
         # Add the visited cells to the observed cells (for visualization)
-        self.env.dev_obs_dict[handle] = set(visible_cells) # tipo (position[0], position[1], direction) TODO not sure if works like this
+        #self.env.dev_obs_dict[handle] = set(visible_cells) # tipo (position[0], position[1], direction) TODO not sure if works like this
         
-        # Get rail_obs/transition_map
-        
+        # Get local rail_obs
+        local_rail_obs = np.zeros((self.view_height, self.view_width, 16))
+        '''
+        for i in range(self.view_height):
+            for j in range(self.view_width):
+                pos = visible_cells[i,j]
+                if pos is not -np.inf:
+                    local_rail_obs[i, j] = self.rail_obs[pos[0], pos[1]]
+        '''
         # Build agents obs
-        # Collect agent position and direction 
-        
-        # Collect other agents position and direction
-        
-        # Collect data about malfunctions
-        
-        # Collect speed/priority
-        
-        # Collect data about agent ready to depart
+        agents_state_obs = np.zeros((self.view_height, self.view_width, 5))
         # Build targets obs
-        # Collect position of agent target
-        
-        # Collect positions of other agents targets
-        pass
+        targets_obs = np.zeros((self.view_height, self.view_width, 2))
+        i = 0
+        for pos in visible_cells:  # Absolute coords
+            curr_rel_coord = rel_coords[i]  # Convert into relative coords
+            local_rail_obs[curr_rel_coord[0], curr_rel_coord[1], :] = self.rail_obs[pos[0], pos[1], :]
+            
+            if pos == agent_virtual_position:
+                # Collect this agent position and direction
+                agents_state_obs[curr_rel_coord[0], curr_rel_coord[1], 0] = agent.direction
+            if pos == agent.target: # TODO use also subtargets
+                # Collect position of agent target
+                targets_obs[curr_rel_coord[0], curr_rel_coord[1], 0] = 1     
+            for a in agents:
+                # Collect info about active agents: positions and directions, malfunctions length, speed/priorities
+                if a.status == RailAgentStatus.ACTIVE:
+                    if pos == a.position:
+                        agents_state_obs[curr_rel_coord[0], curr_rel_coord[1], 1] = a.direction
+                        agents_state_obs[curr_rel_coord[0], curr_rel_coord[1], 2] = a.malfunction_data['malfunction']
+                        agents_state_obs[curr_rel_coord[0], curr_rel_coord[1], 3] = a.speed_data['speed']
+                # Collect info about ready to depart agents
+                elif a.status == RailAgentStatus.READY_TO_DEPART:
+                    if pos == a.initial_position:
+                        agents_state_obs[curr_rel_coord[0], curr_rel_coord[1], 4] = a.initial_direction
+                # Collect positions of other agents targets
+                if pos == a.target:
+                    targets_obs[curr_rel_coord[0], curr_rel_coord[1], 1] = 1
+            i += 1
+            
+        return local_rail_obs, agents_state_obs, targets_obs
+    
+    def get_many(self, handles: Optional[List[int]] = None) -> Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """
+        Called whenever an observation has to be computed for the `env` environment, for each agent with handle
+        in the `handles` list.
+        """
+
+        return super().get_many(handles)
+    
     '''
     Given agent current position and direction, returns the field of view of the agent as np.array of cells on the grid in
     absolute coordinates. Value is -np.inf to indicate padding (when agent lies on border).
@@ -113,7 +147,9 @@ class LocalObsForRailEnv(ObservationBuilder):
     def _field_of_view(self, position, direction):
         
         # Compute visible cells
-        visible_cells = np.full((self.view_width, self.view_height, 2), -np.inf)        
+        # visible_cells = np.full((self.view_height, self.view_width, 2), -np.inf, dtype=int)
+        visible_cells = list()
+        rel_coords = list()
 
         if direction == 0:  # North
             origin = (position[0] - self.offset, position[1] - self.view_semiwidth)
@@ -124,8 +160,8 @@ class LocalObsForRailEnv(ObservationBuilder):
         else:  # West
             origin = (position[0] + self.view_semiwidth, position[1] - self.offset)
 
-        for i in range(self.view_width):
-            for j in range(self.view_height):
+        for i in range(self.view_height):
+            for j in range(self.view_width):
                 if direction == 0:
                     cell_to_add = (origin[0] + j, origin[1] + i)
                 elif direction == 1:  # Rectangle is flipped 90°
@@ -138,7 +174,9 @@ class LocalObsForRailEnv(ObservationBuilder):
                 if cell_to_add[0] >= self.env.height or cell_to_add[1] >= self.env.width or cell_to_add[0] < 0 or \
                         cell_to_add[1] < 0:
                     break
-                visible_cells[i, j] = cell_to_add  # In absolute coordinates
+                # visible_cells[i, j] = cell_to_add  # In absolute coordinates
+                visible_cells.append(cell_to_add)
+                rel_coords.append((i, j))
                 
-        return visible_cells
+        return visible_cells, rel_coords
 
