@@ -23,7 +23,7 @@ from flatland.utils.ordered_set import OrderedSet
 from flatland.envs.agent_utils import RailAgentStatus
 from flatland.envs.distance_map import DistanceMap
 from flatland.envs.rail_env import RailEnvNextAction, RailEnvActions
-from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_, get_action_for_move
+from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_#, get_action_for_move
 from flatland.core.grid.grid4_utils import get_new_position
 from flatland.core.grid.grid_utils import coordinate_to_position
 
@@ -152,6 +152,9 @@ class GraphObsForRailEnv(ObservationBuilder):
             if shortest_paths[handle] is None:  # Railway disrupted
                 action = RailEnvActions.STOP_MOVING
             else:
+                step = shortest_paths[handle][0]
+                next_action_element = step[2][0]  # Get next_action_element
+                ''' THIS WORKS WITH NEXT VERSION
                 next_direction = shortest_paths[handle][1].direction
                 next_position = shortest_paths[handle][1].position # COULD return None?
                 action = get_action_for_move(agent.position, agent.direction, next_position, next_direction, self.env.rail)
@@ -166,7 +169,7 @@ class GraphObsForRailEnv(ObservationBuilder):
                     action = RailEnvActions.MOVE_FORWARD
                 elif next_action_element == 3:
                     action = RailEnvActions.MOVE_RIGHT
-                '''
+                
         else:  # If status == DONE
             action = RailEnvActions.DO_NOTHING
 

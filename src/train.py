@@ -1,5 +1,4 @@
 from collections import deque
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import sys
@@ -13,7 +12,7 @@ sys.path.append(str(base_dir))
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
-from flatland.envs.malfunction_generators import malfunction_from_params, MalfunctionParameters
+from flatland.envs.malfunction_generators import malfunction_from_params#, MalfunctionParameters
 
 from src.graph_observations import GraphObsForRailEnv
 from src.local_observations import LocalObsForRailEnv
@@ -41,12 +40,20 @@ def main(args):
                         1. / 4.: 0.25}  # Slow freight train
 
     schedule_generator = sparse_schedule_generator(speed_ration_map)
-
+    
+    ''' THIS WORKS WITH NEXT VERSION
     stochastic_data = MalfunctionParameters(
         malfunction_rate=args.malfunction_rate,  # Rate of malfunction occurrence of single agent
         min_duration=args.min_duration,  # Minimal duration of malfunction
         max_duration=args.max_duration  # Max duration of malfunction
     )
+    '''
+    
+    stochastic_data = {
+        'malfunction_rate' : args.malfunction_rate,
+        'min_duration' : args.min_duration,
+        'max_duration' : args.max_duration
+    }
     
     if args.observation_builder == 'GraphObsForRailEnv':
         
@@ -221,9 +228,6 @@ def main(args):
                     formatted_action_prob))
             torch.save(agent.qnetwork_local.state_dict(),'./nets/avoid_checkpoint' + str(ep) + '.pth')
             action_prob = [1] * railenv_action_size
-
-    plt.plot(scores)
-    plt.show()
 
 
 if __name__ == '__main__':
