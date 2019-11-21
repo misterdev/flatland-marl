@@ -27,7 +27,7 @@ controller = Agent(state_size, network_action_size)
 railenv_action_dict = dict()
 
 
-with path(src.nets, "avoid_checkpoint300.pth") as file_in:
+with path(src.nets, "avoid_checkpoint100NEW.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
     
 evaluation_number = 0
@@ -57,8 +57,8 @@ while True:
         time_start = time.time()
         # Pick actions
         for a in range(number_of_agents):
-            shortest_path_action = int(observation_builder.get_shortest_path_action(a))
-            railenv_action, network_action = controller.act(obs[a], shortest_path_action)
+            network_action = controller.act(obs[a])
+            railenv_action = observation_builder.choose_railenv_action(a, network_action)
             railenv_action_dict.update({a: railenv_action})
             
         time_taken = time.time() - time_start

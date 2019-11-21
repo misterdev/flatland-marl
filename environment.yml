@@ -39,10 +39,8 @@ dependencies:
   - glib=2.58.3
   - gmp=6.1.2
   - gobject-introspection=1.58.2
-  - graph-tool=2.29
   - gst-plugins-base=1.14.5
   - gstreamer=1.14.5
-  - gtk3=3.14.15
   - harfbuzz=1.0.6
   - icu=64.2
   - intel-openmp=2019.4
@@ -83,7 +81,6 @@ dependencies:
   - pango=1.38.1
   - pcre=8.43
   - pillow=6.2.1
-  - pip=19.3.1
   - pixman=0.38.0
   - pthread-stubs=0.4
   - pycairo=1.18.2
@@ -119,6 +116,7 @@ dependencies:
   - zlib=1.2.11
   - zstd=1.4.3
   - pip:
+    - aicrowd-repo2docker==0.10.0
     - atomicwrites==1.3.0
     - attrs==19.3.0
     - chardet==3.0.4
@@ -127,7 +125,10 @@ dependencies:
     - configobj==5.0.6
     - crowdai-api==0.1.22
     - cryptography==2.8
+    - decorator==4.4.1
+    - docker==4.1.0
     - entrypoints==0.3
+    - escapism==1.0.0
     - filelock==3.0.12
     - flatland-rl==2.1.10
     - future==0.18.2
@@ -135,42 +136,52 @@ dependencies:
     - idna==2.8
     - importlib-metadata==0.23
     - importlib-resources==1.0.2
+    - ipython-genutils==0.2.0
     - jeepney==0.4.1
+    - jinja2==2.10.3
+    - jupyter-repo2docker==0.10.0
     - keyring==19.2.0
     - knockknock==0.1.5
     - lxml==4.4.1
+    - markupsafe==1.1.1
     - more-itertools==7.2.0
     - msgpack==0.6.2
     - msgpack-numpy==0.4.4.3
     - packaging==19.2
     - pandas==0.25.3
+    - pip==19.1.1
     - pluggy==0.13.0
     - py==1.8.0
     - pyarrow==0.15.1
     - pyglet==1.3.2
-    - pygobject==3.30.5
     - pyjwt==1.7.1
     - pyqt5-sip==4.19.18
     - pyqtwebengine==5.12.1
     - pytest==5.2.2
     - pytest-runner==5.2
     - python-gitlab==1.13.0
+    - python-json-logger==0.1.11
     - python-telegram-bot==12.2.0
     - pytz==2019.3
     - recordtype==1.3
     - redis==3.3.11
     - requests==2.22.0
+    - ruamel-yaml==0.16.5
+    - ruamel-yaml-clib==0.2.0
     - scipy==1.3.1
     - secretstorage==3.1.1
+    - semver==2.9.0
     - svgutils==0.3.1
     - timeout-decorator==0.4.1
     - toml==0.10.0
     - tox==3.14.0
+    - traitlets==4.3.3
     - twilio==6.33.0
     - urllib3==1.25.6
     - ushlex==0.99.1
     - virtualenv==16.7.7
     - wcwidth==0.1.7
+    - websocket-client==0.56.0
     - xarray==0.14.0
     - yagmail==0.11.224
     - zipp==0.6.0
