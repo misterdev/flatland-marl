@@ -1,0 +1,10 @@
+Test: Test-5	 Agent Dones: 100.0%	 Score: -457.3333333333307
+Test: Test-4	 Agent Dones: 10.0%	     Score: -2827.0000000000196
+Test: Test-3	 Agent Dones: 80.0%	     Score: -1158.6666666666665
+Test: Test-2	 Agent Dones: 20.0%	     Score: -2931.833333333345
+Test: Test-1	 Agent Dones: 20.0%	     Score: -2710.666666666676
+Test: Test0	     Agent Dones: 0.0%	     Score: -3280.0000000000373
+Test: Test1	     Agent Dones: 40.0%	     Score: -2283.666666666661
+Test: Test2	     Agent Dones: 20.0%	     Score: -2616.5000000000095
+Test: Test3	     Agent Dones: 100.0%	 Score: -1691.3333333333171
+Test: Test4	     Agent Dones: 50.0%	     Score: -1675.9999999999734

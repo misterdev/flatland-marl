@@ -18,6 +18,7 @@ def print_info(env):
     # If multiple agents want to enter the same cell at the same time the lower index agent will enter first.
 
     # Let's check if there are any agents with the same start location
+    '''
     agents_with_same_start = set()
     print("\n The following agents have the same initial position:")
     print("=====================================================")
@@ -26,7 +27,7 @@ def print_info(env):
             if agent_idx != agent_2_idx and agent.initial_position == agent2.initial_position:
                 print("Agent {} as the same initial position as agent {}".format(agent_idx, agent_2_idx))
                 agents_with_same_start.add(agent_idx)
-
+    
     # Lets try to enter with all of these agents at the same time
     action_dict = dict()
 
@@ -35,8 +36,9 @@ def print_info(env):
 
     # Do a step in the environment to see what agents entered:
     obs, rewards, done, infos = env.step(action_dict)
-
+    '''
     # Speed
+    '''
     print("\n The speed information of the agents are:")
     print("=========================================")
 
@@ -44,8 +46,9 @@ def print_info(env):
         print(
             "Agent {} speed is: {:.2f} with the current fractional position being {}".format(
                 agent_idx, agent.speed_data['speed'], agent.speed_data['position_fraction']))
-
+    '''
     # Malfunctions
+    '''
     print("\n The malfunction data of the agents are:")
     print("========================================")
 
@@ -53,7 +56,7 @@ def print_info(env):
         print(
             "Agent {} is OK = {}".format(
                 agent_idx, agent.malfunction_data['malfunction'] < 1))
-        
+    '''
     '''
 
     # Which agents needs to pick and action

@@ -47,6 +47,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         self.predicted_pos = {}  # Dict ts : int_pos_list
         self.predicted_pos_coord = {}  # Dict ts : coord_pos_list
         self.predicted_dir = {}  # Dict ts : dir (float)
+        self.num_active_agents = 0
 
     def set_env(self, env: Environment):
         super().set_env(env)
@@ -60,6 +61,10 @@ class GraphObsForRailEnv(ObservationBuilder):
 
     def get_many(self, handles: Optional[List[int]] = None) -> {}:
         
+        self.num_active_agents = 0
+        for a in self.env.agents:
+            if a.status == RailAgentStatus.ACTIVE:
+                self.num_active_agents += 1
         self.prediction_dict = self.predictor.get()
         # Useful to check if occupancy is correctly computed
         self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
@@ -143,8 +148,12 @@ class GraphObsForRailEnv(ObservationBuilder):
         agent = self.env.agents[handle]
 
         if agent.status == RailAgentStatus.READY_TO_DEPART:
-            # This could be reasonable since agents never start on switches - I guess
-            action = RailEnvActions.MOVE_FORWARD
+            
+            if self.num_active_agents < len(self.env.agents) / 2:  # TODO
+                # This could be reasonable since agents never start on switches - I guess
+                action = RailEnvActions.MOVE_FORWARD
+            else:
+                action = RailEnvActions.DO_NOTHING
 
         elif agent.status == RailAgentStatus.ACTIVE:
             # This can return None when rails are disconnected or there was an error in the DistanceMap
