@@ -134,6 +134,13 @@ def main(args):
         
         for step in range(max_steps - 1):
 
+            print(
+                '\r{} Agents on ({},{}).\t Ep: {}\t Step/MaxSteps: {} / {}'.format(
+                    env.get_num_agents(), args.width, args.height,
+                    ep,
+                    step,
+                    max_steps), end=" ")
+
             # Logging
             #print_info(env)
 

@@ -1,7 +1,7 @@
 import torch
 import sys
 import time
-
+import pprint
 # First of all we import the Flatland rail environment
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator, complex_rail_generator, rail_from_file
@@ -28,9 +28,7 @@ config = ConfigObj("./tests-config.ini")
 tests = config.sections
 n_tests = len(tests)
 
-seed = 5  # Random seed
 grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
-init_render_env = True # True if RenderEnv must be initialized
 
 # rail_generator = rail_from_file("../test-envs/Test_0/Level_0.pkl")
 
@@ -55,15 +53,16 @@ railenv_action_dict = dict()
 # Here you can pre-load an agent
 with path(src.nets, "avoid_checkpoint300.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
-# TODO fix, doesn't work
+
 for test in tests:
     score = 0
+    num_agents_done = 0
     # Build the env according to config parameters
     env = RailEnv(width=config[test].as_int('width'),
                   height=config[test].as_int('height'),
                   rail_generator=sparse_rail_generator(
                             max_num_cities=config[test].as_int('max_num_cities'), 
-                            seed=seed,
+                            seed=config[test].as_int('seed'),
                             grid_mode=grid_distribution_of_cities,
                             max_rails_between_cities=config[test].as_int('max_rails_between_cities'),
                             max_rails_in_city=config[test].as_int('max_rail_in_city')
@@ -82,17 +81,26 @@ for test in tests:
     observations, infos = env.reset(True, True)
 
     # Initiate the renderer
-    env_renderer = RenderTool(env, gl="PILSVG",
-                              agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS_AND_BOX,
+    env_renderer = RenderTool(env, 
+                              gl="PILSVG",
+                              agent_render_variant=AgentRenderVariant.ONE_STEP_BEHIND,
                               show_debug=True,
                               screen_height=1080,
                               screen_width=1920)
 
     env_renderer.reset()
     # TODO Change 'max_num_cities' to 'num_cities' (effective) when this info will be available
-    # max_time_steps = int(4 * 2 * (config[test].as_int('width') + config[test].as_int('height') + config[test].as_int('num_agents') / config[test].as_int('max_num_cities')))
-    max_time_steps = int(3 * (config[test].as_int('width') + config[test].as_int('height')))
-    
+    max_time_steps = int(4 * 2 * (config[test].as_int('width') + config[test].as_int('height') + config[test].as_int('num_agents') / config[test].as_int('max_num_cities')))
+    # max_time_steps = int(3 * (config[test].as_int('width') + config[test].as_int('height')))
+    '''
+    print("\nAgents in the environment have to solve the following tasks: \n")
+    for agent_idx, agent in enumerate(env.agents):
+        print(
+            "Agent {} has initial position {}, initial direction {}, target at {}.".format(
+                agent_idx, agent.initial_position, agent.direction, agent.target))
+    for agent_idx, agent in enumerate(env.agents):
+        print("Agent {} is: {} in (current) position {}".format(agent_idx, str(agent.status), str(agent.position)))
+    '''
     # Pick first action
     for a in range(env.get_num_agents()):
         # Agent performs action only if required
@@ -101,23 +109,29 @@ for test in tests:
         railenv_action = observation_builder.choose_railenv_action(a, network_action)
         railenv_action_dict.update({a: railenv_action})
         network_action_dict.update({a: network_action})
-
+        
+    #pprint.pprint(railenv_action_dict)
     # Environment step
     next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
 
     for step in range(max_time_steps - 1):
-    
-        # Logging
-        # print_info(env)
-        print('\rTest: {}\t Step / MaxSteps: {} / {}'.format(
+        '''
+        print('\rTest: {}\t Step / MaxSteps: {} / {}\n'.format(
             test,
             step+1,
             max_time_steps
         ), end=" ")
-        
+        '''
+        '''
+        for agent_idx, agent in enumerate(env.agents):
+            print(
+                "Agent {} ha state {} in (current) position {} with malfunction {}".format(
+                    agent_idx, str(agent.status), str(agent.position), str(agent.malfunction_data['malfunction'])))
+        '''
         # Chose an action for each agent in the environment
         for a in range(env.get_num_agents()):
             if infos['action_required'][a]:
+                # print('Agent {} needs to submit an action'.format(a))
                 # Agent performs action only if required
                 # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
                 network_action = controller.act(observations[a])
@@ -128,12 +142,20 @@ for test in tests:
                 
             railenv_action_dict.update({a: railenv_action})
             network_action_dict.update({a: network_action})
-    
+        
+        for a in (1,5):
+            print('#########################################')
+            print('Info for agent {}'.format(a))
+            print('State: {}'.format(observations[a]))
+            print('Network action: {}'.format(network_action_dict[a]))
+            print('Railenv action: {}'.format(railenv_action_dict[a]))
+        
+            
         # Environment step which returns the observations for all agents, their corresponding
         # reward and whether their are done
-        next_obs, all_rewards, done, _ = env.step(railenv_action_dict)
+        next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
     
-        env_renderer.render_env(show=True, show_observations=False, show_predictions=False)
+        env_renderer.render_env(show=True, show_observations=False, show_predictions=False, selected_agent=3)
         for a in range(env.get_num_agents()):
             score += all_rewards[a]
     
@@ -142,4 +164,14 @@ for test in tests:
             break
             
     env_renderer.close_window()
-    print('\nTest: {}\t Score = {}'.format(test, score))
+    # Compute num of agents that reached their target
+    for a in range(env.get_num_agents()):
+        if done[a]:
+            num_agents_done += 1
+            
+    print(
+        '\nTest: {}\t Agent Dones: {}%\t Score: {}'.format(
+        test,
+        100 * (num_agents_done / env.get_num_agents()),
+        score))
+    
