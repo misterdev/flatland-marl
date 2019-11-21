@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from fc_treeobs.model import QNetwork
+from src.model import QNetwork, ConvQNetwork
 
 BUFFER_SIZE = int(1e5)  # replay buffer size
 BATCH_SIZE = 512  # minibatch size
@@ -24,7 +24,7 @@ print(device)
 class Agent:
     """Interacts with and learns from the environment."""
 
-    def __init__(self, state_size, action_size, double_dqn=True):
+    def __init__(self, network_type, state_size, action_size, double_dqn=True):
         """Initialize an Agent object.
 
         Params
@@ -36,7 +36,10 @@ class Agent:
         self.action_size = action_size
         self.double_dqn = double_dqn
         # Q-Network
-        self.qnetwork_local = QNetwork(state_size, action_size).to(device)
+        if network_type == 'FC': # Fully connected
+            self.qnetwork_local = QNetwork(state_size, action_size).to(device)
+        else: # Convolutional
+            self.qnetwork_local = ConvQNetwork(state_size, action_size).to(device) # state_size == in_channels
         self.qnetwork_target = copy.deepcopy(self.qnetwork_local)
 
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
@@ -182,7 +185,21 @@ class ReplayBuffer:
         """Return the current size of internal memory."""
         return len(self.memory)
 
+    ''' 
+    This same function is used for states, actions, rewards etc, so the parameter 'states' doesn't contain states all the time
+    and for this reason output can have different shapes.
+    In any case returns a batch of experience according to the specified batch_size.
+    '''
     def __v_stack_impr(self, states):
-        sub_dim = len(states[0][0]) if isinstance(states[0], Iterable) else 1
-        np_states = np.reshape(np.array(states), (len(states), sub_dim))
+        #sub_dim = len(states[0][0]) if isinstance(states[0], Iterable) else 1
+        # means states are actually states (not actions, or rewards...)
+        if isinstance(states[0], Iterable):
+            sub_dim = len(states[0][0])
+            # np.array creates a 1d array of states and np.reshape tries to reshape it into (batch_size, in_channels)
+            # 'states' is a list containing batch_size arrays of shape (1, in_channels, view_width, view_height)
+            np_states = np.reshape(np.array(states), (len(states), sub_dim, 15,  30)) # TODO add param env_width env_height
+        else:
+            sub_dim = 1
+            np_states = np.reshape(np.array(states), (len(states), sub_dim))
+
         return np_states

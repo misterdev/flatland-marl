@@ -15,6 +15,8 @@ from flatland.core.grid.grid4_utils import get_new_position
 from flatland.core.grid.grid_utils import coordinate_to_position
 from flatland.envs.agent_utils import RailAgentStatus, EnvAgent
 from flatland.utils.ordered_set import OrderedSet
+from flatland.envs.distance_map import DistanceMap
+from flatland.envs.rail_env_shortest_paths import get_shortest_paths
 
 
 class LocalObsForRailEnv(ObservationBuilder):
@@ -53,6 +55,7 @@ class LocalObsForRailEnv(ObservationBuilder):
         self.offset = offset  # Agent offset along axis of the agent's direction
         self.rail_obs = None
         self.targets_obs = None
+        self.shortest_paths = None
 
     def set_env(self, env: Environment):
         super().set_env(env)
@@ -68,6 +71,8 @@ class LocalObsForRailEnv(ObservationBuilder):
                 self.rail_obs[i, j] = np.array(bitlist)
         # Global targets - not subtargets
         self.targets_obs = np.zeros((self.view_height, self.view_width, 2))
+        distance_map: DistanceMap = self.env.distance_map
+        self.shortest_paths = get_shortest_paths(distance_map)  # TODO Must be computed in the get_many since at reset it doesn't fill values. but i don't want to compute it everytime
 
 
     def get(self, handle: int = 0) -> (np.ndarray, np.ndarray, np.ndarray):
@@ -86,7 +91,7 @@ class LocalObsForRailEnv(ObservationBuilder):
             
         # Compute field of view
         visible_cells, rel_coords = self._field_of_view(agent_virtual_position, agent.direction)
-        
+        subtarget = self._find_subtarget(handle, visible_cells)
         # Add the visited cells to the observed cells (for visualization)
         #self.env.dev_obs_dict[handle] = set(visible_cells) # tipo (position[0], position[1], direction) TODO not sure if works like this
         
@@ -111,7 +116,7 @@ class LocalObsForRailEnv(ObservationBuilder):
             if pos == agent_virtual_position:
                 # Collect this agent position and direction
                 agents_state_obs[curr_rel_coord[0], curr_rel_coord[1], 0] = agent.direction
-            if pos == agent.target: # TODO use also subtargets
+            if pos == subtarget:
                 # Collect position of agent target
                 targets_obs[curr_rel_coord[0], curr_rel_coord[1], 0] = 1     
             for a in agents:
@@ -137,7 +142,7 @@ class LocalObsForRailEnv(ObservationBuilder):
         Called whenever an observation has to be computed for the `env` environment, for each agent with handle
         in the `handles` list.
         """
-
+        self.shortest_paths = get_shortest_paths(self.env.distance_map)
         return super().get_many(handles)
     
     '''
@@ -180,3 +185,22 @@ class LocalObsForRailEnv(ObservationBuilder):
                 
         return visible_cells, rel_coords
 
+    
+    def _find_subtarget(self, handle, visible_cells):
+        """
+        
+        :param handle: agent id, 
+                visible_cells: pos (y, x) of visible cells for agent in absolute coordinates
+        :return: cell in the shortest path of this agent (handle) that is closest to target and visible to the agent 
+        (i.e. in its field of view). Equal to real target when already visible.
+        """
+        if self.shortest_paths is not None:
+            # Get shortest path
+            shortest_path = self.shortest_paths[handle]
+            # Walk path from target to source to find first pos that is in view
+            for i in range(len(shortest_path) - 1, -1, -1):
+                cell = shortest_path[i][0]
+                if cell in visible_cells: # Not really efficient
+                    return cell
+        else:
+            return None

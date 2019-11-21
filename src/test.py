@@ -18,7 +18,7 @@ sys.path.append(str(base_dir))
 from importlib_resources import path
 from src.graph_observations import GraphObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
-from src.dueling_double_dqn_mod import Agent
+from src.dueling_double_dqn import Agent
 from src.print_info import print_info
 import src.nets
 

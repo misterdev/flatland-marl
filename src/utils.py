@@ -39,3 +39,15 @@ if __name__ == "__main__":
     prios = assign_random_priority(5)
     print(prios)
 
+def preprocess_obs(obs):
+    """Preprocess local observations before feeding to the conv network"""
+
+    # Concatenate info about rail, agent and targets
+    agent_obs = np.concatenate((obs[0], obs[1], obs[2]), axis=2)
+    # Reshape for PyTorch CNN - BCHW
+    # from (env_width, env_height, in_channels=22) to (batch_size, in_channels=22, env_height, env_width)
+    # agent_obs[a] = np.expand_dims(np.transpose(agent_obs[a], (2, 1, 0)), axis=0)
+    agent_obs = np.transpose(agent_obs, (2, 1, 0))
+    
+    return agent_obs
+

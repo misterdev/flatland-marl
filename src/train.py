@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import sys
 import argparse
+import pprint
 # make sure the root path is in system path
 from pathlib import Path
 # These 2 lines must go before the import from src/
@@ -17,9 +18,8 @@ from flatland.envs.malfunction_generators import malfunction_from_params#, Malfu
 from src.graph_observations import GraphObsForRailEnv
 from src.local_observations import LocalObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
+from src.utils import preprocess_obs
 
-# I can import files from the other folder
-from src.dueling_double_dqn_mod import Agent as ModAgent
 from src.dueling_double_dqn import Agent
 from src.print_info import print_info
 
@@ -63,13 +63,15 @@ def main(args):
         state_size = args.prediction_depth + 3
         network_action_size = 2  # {follow path, stop}
         railenv_action_size = 5  # The RailEnv possible actions
-        agent = ModAgent(state_size=state_size, action_size=network_action_size)
+        agent = Agent(network_type='FC', state_size=state_size, action_size=network_action_size)
 
     elif args.observation_builder == 'LocalObsForRailEnv':
+        
         observation_builder = LocalObsForRailEnv(args.view_semiwidth, args.view_height, args.offset)
-        state_size = (2 * args.view_semiwidth + 1) * args.height  # TODO
+        #state_size = (2 * args.view_semiwidth + 1) * args.height
+        state_size = 16 + 5 + 2 # state_size == in_channels
         railenv_action_size = 5
-        agent = Agent(state_size, railenv_action_size)
+        agent = Agent(network_type='Conv', state_size=state_size, action_size=railenv_action_size)
 
     # Construct the environment with the given observation, generators, predictors, and stochastic data
     env = RailEnv(width=args.width,
@@ -104,9 +106,10 @@ def main(args):
         final_obs = agent_obs.copy()
         final_obs_next = agent_next_obs.copy()
 
-        # Normalize obs TODO now it does nothing
-        for a in range(env.get_num_agents()):
-            agent_obs[a] = obs[a]
+        # Normalize obs, only for LocalObs now
+        if args.observation_builder == 'LocalObsForRailEnv':       
+            for a in range(env.get_num_agents()):
+                agent_obs[a] = preprocess_obs(obs[a])
 
         score = 0
         env_done = 0
@@ -160,6 +163,9 @@ def main(args):
                     railenv_action = agent.act(agent_obs[a], eps=eps)
                     action_prob[railenv_action] += 1
                     railenv_action_dict.update({a: railenv_action})
+                    
+            for a in range(4):  # only first 10 agents for debugging
+                print('Agent {} action {}'.format(a, railenv_action_dict[a]))
 
             # Environment step
             next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
@@ -173,7 +179,12 @@ def main(args):
             '''
 
             for a in range(env.get_num_agents()):
-                agent_next_obs[a] = next_obs[a]
+                if args.observation_builder == 'LocalObsForRailEnv':
+                    agent_next_obs[a] = preprocess_obs(next_obs[a])
+                    if a < 4:
+                        print('Agent {} next obs: {}'.format(a, agent_next_obs[a]))
+                else:
+                    agent_next_obs[a] = next_obs[a]  # Don't normalize GraphObs
                 if done[a]:             
                     final_obs[a] = agent_obs[a].copy()
                     final_obs_next[a] = agent_next_obs[a].copy()
@@ -187,8 +198,9 @@ def main(args):
                         agent.step(agent_obs[a], railenv_action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
 
                 score += all_rewards[a] / env.get_num_agents()  # Update score
-
+            # Store next_obs for next step
             agent_obs = agent_next_obs.copy()
+            
             if done['__all__']:
                 env_done = 1
                 # Perform last actions separately
@@ -196,7 +208,7 @@ def main(args):
                     agent.step(final_obs[a], final_action_dict[a], all_rewards[a], final_obs_next[a], done[a])
                 break
         
-        # At the end of the episode
+        ################### At the end of the episode
         eps = max(eps_end, eps_decay * eps)  # Decrease epsilon
         # Metrics
         done_window.append(env_done)

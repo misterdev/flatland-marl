@@ -9,7 +9,7 @@ from flatland.evaluators.client import FlatlandRemoteClient  # For evaluation
 
 from src.graph_observations import GraphObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
-from src.dueling_double_dqn_mod import Agent
+from src.dueling_double_dqn import Agent
 import src.nets
 
 base_dir = Path(__file__).resolve().parent.parent
