@@ -93,7 +93,7 @@ class LocalObsForRailEnv(ObservationBuilder):
         visible_cells, rel_coords = self._field_of_view(agent_virtual_position, agent.direction)
         subtarget = self._find_subtarget(handle, visible_cells)
         # Add the visited cells to the observed cells (for visualization)
-        #self.env.dev_obs_dict[handle] = set(visible_cells) # tipo (position[0], position[1], direction) TODO not sure if works like this
+        self.env.dev_obs_dict[handle] = set(visible_cells)
         
         # Get local rail_obs
         local_rail_obs = np.zeros((self.view_height, self.view_width, 16))
@@ -168,13 +168,13 @@ class LocalObsForRailEnv(ObservationBuilder):
         for i in range(self.view_height):
             for j in range(self.view_width):
                 if direction == 0:
-                    cell_to_add = (origin[0] + j, origin[1] + i)
+                    cell_to_add = (origin[0] + i, origin[1] + j)
                 elif direction == 1:  # Rectangle is flipped 90°
-                    cell_to_add = (origin[0] + i, origin[1] - j)
+                    cell_to_add = (origin[0] + j, origin[1] - i)
                 elif direction == 2:
-                    cell_to_add = (origin[0] - j, origin[1] - i)
+                    cell_to_add = (origin[0] - i, origin[1] - j)
                 elif direction == 3:
-                    cell_to_add = (origin[0] - i, origin[1] + j)
+                    cell_to_add = (origin[0] - j, origin[1] + i)
 
                 if cell_to_add[0] >= self.env.height or cell_to_add[1] >= self.env.width or cell_to_add[0] < 0 or \
                         cell_to_add[1] < 0:
