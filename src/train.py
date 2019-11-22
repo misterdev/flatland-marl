@@ -146,9 +146,9 @@ def main(args):
 
             # Logging
             #print_info(env)
-
-            for a in infos['action_required']:
-                # Agent performs action only if required
+    
+            for a in range(env.get_num_agents()):
+                
                 if args.observation_builder == 'GraphObsForRailEnv':
                     # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
                     network_action = agent.act(agent_obs[a], eps=eps)
@@ -158,18 +158,21 @@ def main(args):
                     action_prob[railenv_action] += 1
                     railenv_action_dict.update({a: railenv_action})
                     network_action_dict.update({a: network_action})
-
+    
                 elif args.observation_builder == 'LocalObsForRailEnv':
-                    railenv_action = agent.act(agent_obs[a], eps=eps)
+                    if infos['action_required'][a]:
+                        railenv_action = agent.act(agent_obs[a], eps=eps)
+                    else:
+                        railenv_action = 0 # If action is not required DO_NOTHING
                     action_prob[railenv_action] += 1
                     railenv_action_dict.update({a: railenv_action})
-                    
+            '''
             for a in range(4):  # only first 10 agents for debugging
                 print('Agent {} action {}'.format(a, railenv_action_dict[a]))
-
+            '''
             # Environment step
             next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
-
+    
             # Which agents needs to pick and action
             '''
             print("\n The following agents can register an action:")
@@ -177,12 +180,10 @@ def main(args):
             for info in infos['action_required']:
                 print("Agent {} needs to submit an action.".format(info))
             '''
-
+    
             for a in range(env.get_num_agents()):
                 if args.observation_builder == 'LocalObsForRailEnv':
                     agent_next_obs[a] = preprocess_obs(next_obs[a])
-                    if a < 4:
-                        print('Agent {} next obs: {}'.format(a, agent_next_obs[a]))
                 else:
                     agent_next_obs[a] = next_obs[a]  # Don't normalize GraphObs
                 if done[a]:             
@@ -196,7 +197,7 @@ def main(args):
                         agent.step(agent_obs[a], network_action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
                     elif args.observation_builder == 'LocalObsForRailEnv':
                         agent.step(agent_obs[a], railenv_action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
-
+    
                 score += all_rewards[a] / env.get_num_agents()  # Update score
             # Store next_obs for next step
             agent_obs = agent_next_obs.copy()
@@ -207,7 +208,7 @@ def main(args):
                 for a in range(env.get_num_agents()):
                     agent.step(final_obs[a], final_action_dict[a], all_rewards[a], final_obs_next[a], done[a])
                 break
-        
+    
         ################### At the end of the episode
         eps = max(eps_end, eps_decay * eps)  # Decrease epsilon
         # Metrics
@@ -245,7 +246,7 @@ def main(args):
                     100 * (num_agents_done/args.num_agents),
                     eps,
                     formatted_action_prob))
-            torch.save(agent.qnetwork_local.state_dict(),'./nets/avoid_checkpoint' + str(ep) + '.pth')
+            torch.save(agent.qnetwork_local.state_dict(),'./nets/' + str(args.model_name) + str(ep) + '.pth')
             action_prob = [1] * railenv_action_size
 
 
@@ -268,11 +269,12 @@ if __name__ == '__main__':
     parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
     parser.add_argument('--bfs_depth', type=int, default=4, help='BFS depth of the graph observation')
     parser.add_argument('--prediction_depth', type=int, default=40, help='Prediction depth for shortest path strategy, i.e. length of a path')
-    parser.add_argument('--view_semiwidth', type=int, default=10, help='Semiwidth of field view for agent in local obs')
-    parser.add_argument('--view_height', type=int, default=20, help='Height of the field view for agent in local obs')
-    parser.add_argument('--offset', type=int, default=20, help='Offset of agent in local obs')
+    parser.add_argument('--view_semiwidth', type=int, default=7, help='Semiwidth of field view for agent in local obs')
+    parser.add_argument('--view_height', type=int, default=30, help='Height of the field view for agent in local obs')
+    parser.add_argument('--offset', type=int, default=25, help='Offset of agent in local obs')
     # Training parameters
     parser.add_argument('--n_episodes', type=int, default=1000, help='Number of episodes on which to train the agents')
+    parser.add_argument('--model_name', type=str, default='avoid_checkpoint', help='Name to use to save the model .pth')
     # DDQN hyperparameters
     
     args = parser.parse_args()
