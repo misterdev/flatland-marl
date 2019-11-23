@@ -83,7 +83,6 @@ def main(args):
                   malfunction_generator_and_process_data=malfunction_from_params(stochastic_data),
                   remove_agents_at_target=True)
     env.reset()
-    # Hardcoded params
 
     max_steps = int(4 * 2 * (args.width + args.height + 20))  # TODO Change
     eps = 1.
@@ -92,7 +91,6 @@ def main(args):
     # Need to have two since env works with RailEnv actions but agent works with network actions
     network_action_dict = dict()
     railenv_action_dict = dict()
-    final_action_dict = dict()
     scores_window = deque(maxlen=100)
     done_window = deque(maxlen=100)
     scores = []
@@ -100,20 +98,25 @@ def main(args):
     action_prob = [0] * railenv_action_size
     agent_obs = [None] * env.get_num_agents()
     agent_next_obs = [None] * env.get_num_agents()
+    agent_obs_buffer = [None] * env.get_num_agents()
+    agent_action_buffer = [2] * env.get_num_agents()
+    update_values = [False] * env.get_num_agents()  # Used to update agent if action was performed in this step
 
     for ep in range(1, args.n_episodes + 1):
+        
         obs, info = env.reset()
-        final_obs = agent_obs.copy()
-        final_obs_next = agent_next_obs.copy()
 
         # Normalize obs, only for LocalObs now
         if args.observation_builder == 'LocalObsForRailEnv':       
             for a in range(env.get_num_agents()):
-                agent_obs[a] = preprocess_obs(obs[a])
+                if obs[a]:
+                    agent_obs[a] = preprocess_obs(obs[a])
+                    agent_obs_buffer[a] = agent_obs[a].copy()
 
         score = 0
         env_done = 0
-
+        '''
+        # TODO Decide (at first action) policy of agents entering the env
         # Pick first action - need to separate to use 'action_required' in the next step
         for a in range(env.get_num_agents()):
             
@@ -131,10 +134,11 @@ def main(args):
                 railenv_action = agent.act(agent_obs[a], eps=eps)
                 action_prob[railenv_action] += 1
                 railenv_action_dict.update({a: railenv_action})
-                
+        
         # Environment step
         next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
-        
+        '''
+        ############# Main loop
         for step in range(max_steps - 1):
 
             print(
@@ -160,10 +164,12 @@ def main(args):
                     network_action_dict.update({a: network_action})
     
                 elif args.observation_builder == 'LocalObsForRailEnv':
-                    if infos['action_required'][a]:
+                    if info['action_required'][a]:
                         railenv_action = agent.act(agent_obs[a], eps=eps)
+                        update_values[a] = True
                     else:
                         railenv_action = 0 # If action is not required DO_NOTHING
+                        update_values[a] = False
                     action_prob[railenv_action] += 1
                     railenv_action_dict.update({a: railenv_action})
             '''
@@ -171,7 +177,7 @@ def main(args):
                 print('Agent {} action {}'.format(a, railenv_action_dict[a]))
             '''
             # Environment step
-            next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
+            next_obs, all_rewards, done, info = env.step(railenv_action_dict)
     
             # Which agents needs to pick and action
             '''
@@ -180,36 +186,27 @@ def main(args):
             for info in infos['action_required']:
                 print("Agent {} needs to submit an action.".format(info))
             '''
-    
-            for a in range(env.get_num_agents()):
-                if args.observation_builder == 'LocalObsForRailEnv':
-                    agent_next_obs[a] = preprocess_obs(next_obs[a])
-                else:
-                    agent_next_obs[a] = next_obs[a]  # Don't normalize GraphObs
-                if done[a]:             
-                    final_obs[a] = agent_obs[a].copy()
-                    final_obs_next[a] = agent_next_obs[a].copy()
-                    if args.observation_builder == 'GraphObsForRailEnv':
-                        final_action_dict.update({a: network_action_dict[a]})
-                    
-                else:
-                    if args.observation_builder == 'GraphObsForRailEnv':
-                        agent.step(agent_obs[a], network_action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
-                    elif args.observation_builder == 'LocalObsForRailEnv':
-                        agent.step(agent_obs[a], railenv_action_dict[a], all_rewards[a], agent_next_obs[a], done[a])
-    
-                score += all_rewards[a] / env.get_num_agents()  # Update score
-            # Store next_obs for next step
-            agent_obs = agent_next_obs.copy()
             
+            # Update replay buffer and train agent
+            for a in range(env.get_num_agents()):
+                if update_values[a] or done[a]:
+                    agent.step(agent_obs_buffer[a], agent_action_buffer[a], all_rewards[a], agent_obs[a], done[a])
+                    agent_obs_buffer[a] = agent_obs[a].copy()
+                    if args.observation_builder == 'GraphObsForRailEnv':
+                        agent_action_buffer[a] = network_action_dict[a]
+                    elif args.observation_builder == 'LocalObsForRailEnv':
+                        agent_action_buffer[a] = railenv_action_dict[a]
+                    
+                if args.observation_builder == 'LocalObsForRailEnv' and next_obs[a]:
+                    agent_obs[a] = preprocess_obs(next_obs[a])
+
+                score += all_rewards[a] / env.get_num_agents()  # Update score
+
             if done['__all__']:
                 env_done = 1
-                # Perform last actions separately
-                for a in range(env.get_num_agents()):
-                    agent.step(final_obs[a], final_action_dict[a], all_rewards[a], final_obs_next[a], done[a])
                 break
     
-        ################### At the end of the episode
+        ################### At the end of the episode TODO This part could be done in another script
         eps = max(eps_end, eps_decay * eps)  # Decrease epsilon
         # Metrics
         done_window.append(env_done)

@@ -190,16 +190,17 @@ class ReplayBuffer:
     and for this reason output can have different shapes.
     In any case returns a batch of experience according to the specified batch_size.
     '''
-    def __v_stack_impr(self, states):
-        #sub_dim = len(states[0][0]) if isinstance(states[0], Iterable) else 1
-        # means states are actually states (not actions, or rewards...)
-        if isinstance(states[0], Iterable):
-            sub_dim = len(states[0][0])
-            # np.array creates a 1d array of states and np.reshape tries to reshape it into (batch_size, in_channels)
+    def __v_stack_impr(self, values):
+        #sub_dim = len(values[0][0]) if isinstance(values[0], Iterable) else 1
+        # values are actually states (not actions, or rewards...)
+        if isinstance(values[0], Iterable):
+            sub_dim = len(values[0][0])
+            # Create a 1d array of states and reshape it into (batch_size, in_channels, view_width, view_height)
             # 'states' is a list containing batch_size arrays of shape (1, in_channels, view_width, view_height)
-            np_states = np.reshape(np.array(states), (len(states), sub_dim, 15,  30)) # TODO add param env_width env_height
-        else:
+            np_values = np.reshape(np.array(values), (len(values), sub_dim, 15,  30)) # TODO add param env_width env_height
+        else:  # values are actions or rewards...
             sub_dim = 1
-            np_states = np.reshape(np.array(states), (len(states), sub_dim))
+            # Create a 1d array of values and reshape it into (batch_size, in_channels)
+            np_values = np.reshape(np.array(values), (len(values), sub_dim))
 
-        return np_states
+        return np_values

@@ -76,7 +76,11 @@ class LocalObsForRailEnv(ObservationBuilder):
 
 
     def get(self, handle: int = 0) -> (np.ndarray, np.ndarray, np.ndarray):
+        """
         
+        :param handle: 
+        :return: local obs for handle agent, None if agent has status DONE_REMOVED
+        """
         agents = self.env.agents
         agent = agents[handle]
         

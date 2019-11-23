@@ -41,7 +41,6 @@ if __name__ == "__main__":
 
 def preprocess_obs(obs):
     """Preprocess local observations before feeding to the conv network"""
-
     # Concatenate info about rail, agent and targets
     agent_obs = np.concatenate((obs[0], obs[1], obs[2]), axis=2)
     # Reshape for PyTorch CNN - BCHW
