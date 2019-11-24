@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class QNetwork(nn.Module):
-    def __init__(self, state_size, action_size, hidsize1=128, hidsize2=128):
+    def __init__(self, state_size, action_size, hidsize1=256, hidsize2=128):
         super(QNetwork, self).__init__()
 
         self.fc1_val = nn.Linear(state_size, hidsize1)

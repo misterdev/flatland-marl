@@ -30,18 +30,18 @@ speed_ration_map = {1.: 0.25,  # Fast passenger train
 
 schedule_generator = sparse_schedule_generator(speed_ration_map)
 
-#observation_builder = LocalObsForRailEnv(view_semiwidth=7, view_height=30, offset=25) # 7, 30, 25
-observation_builder = LocalObsForRailEnv(view_semiwidth=2, view_height=10, offset=8)
+observation_builder = LocalObsForRailEnv(view_semiwidth=7, view_height=30, offset=25) # 7, 30, 25
+#observation_builder = LocalObsForRailEnv(view_semiwidth=2, view_height=6, offset=4)
 
 in_channels = state_size = 16 + 5 + 2
 action_size = 5
-#controller = Agent(network_type='Conv', state_size=state_size, action_size=action_size)
+controller = Agent(network_type='conv', state_size=state_size, action_size=action_size)
 railenv_action_dict = dict()
 
-'''
-with path(src.nets, "avoid_checkpoint300.pth") as file_in:
+
+with path(src.nets, "exp_local_obs400.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
-'''
+
 
 score = 0
 num_agents_done = 0
@@ -56,7 +56,7 @@ env = RailEnv(width=40,
                   max_rails_in_city=6
               ),
               schedule_generator=schedule_generator,
-              number_of_agents=2,
+              number_of_agents=1,
               obs_builder_object=observation_builder,
               malfunction_generator_and_process_data=malfunction_from_params(
                   parameters={
@@ -72,61 +72,51 @@ env_renderer = RenderTool(env,
                           show_debug=True,
                           screen_height=1080,
                           screen_width=1920)
-observations, infos = env.reset()
+obs, info = env.reset()
 env_renderer.reset()
 
-# Normalize obs
+# Preprocess and normalize obs
 for a in range(env.get_num_agents()):
-    observations[a] = preprocess_obs(observations[a])
+    if obs[a]:
+        obs[a] = preprocess_obs(obs[a])
 
-max_time_steps = int(4 * 2 * (20 + 20 + 10 / 2))
-# max_time_steps = int(3 * (config[test].as_int('width') + config[test].as_int('height')))
+max_time_steps = env.compute_max_episode_steps(env.width, env.height)
 
-# Pick first action
-for a in range(env.get_num_agents()):
-    # Agent should performs action only if required
-    #railenv_action = controller.act(observations[a])
-    railenv_action = np.random.choice(np.arange(0, 5))
-    railenv_action_dict.update({a: railenv_action})
-
-# pprint.pprint(railenv_action_dict)
-# Environment step
-next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
-
-for step in range(max_time_steps - 1):
+for step in range(max_time_steps):
+    
     print('\rStep / MaxSteps: {} / {}\n'.format(
         step+1,
         max_time_steps
     ), end=" ")
+    
     '''
     for agent_idx, agent in enumerate(env.agents):
         print(
             "Agent {} ha state {} in (current) position {} with malfunction {}".format(
                 agent_idx, str(agent.status), str(agent.position), str(agent.malfunction_data['malfunction'])))
     '''
-    for a in range(env.get_num_agents()):
-        next_obs[a] = preprocess_obs(next_obs[a])
-        
+
     # Choose an action for each agent in the environment
     for a in range(env.get_num_agents()):
-        if infos['action_required'][a]:
-            # railenv_action = controller.act(next_obs[a])
-            railenv_action = np.random.choice(np.arange(0, 5))
+        if info['action_required'][a]:
+            railenv_action = controller.act(obs[a])
         else:
             railenv_action = 0  # DO NOTHING
 
         railenv_action_dict.update({a: railenv_action})
 
-    for a in range(2):
+    for a in range(1):
         print('#########################################')
         print('Info for agent {}'.format(a))
-        print('State: {}'.format(observations[a]))
+        print('State: {}'.format(obs[a]))
         print('Railenv action: {}'.format(railenv_action_dict[a]))
 
-    next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
-
+    next_obs, all_rewards, done, info = env.step(railenv_action_dict)
     env_renderer.render_env(show=True, show_observations=True, show_predictions=False, selected_agent=0)
     for a in range(env.get_num_agents()):
+        if next_obs[a]:
+            next_obs[a] = preprocess_obs(next_obs[a])
+            obs[a] = next_obs[a].copy()
         score += all_rewards[a]
 
     if done['__all__']:

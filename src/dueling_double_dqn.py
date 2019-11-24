@@ -36,7 +36,7 @@ class Agent:
         self.action_size = action_size
         self.double_dqn = double_dqn
         # Q-Network
-        if network_type == 'FC': # Fully connected
+        if network_type == 'fc': # Fully connected
             self.qnetwork_local = QNetwork(state_size, action_size).to(device)
         else: # Convolutional
             self.qnetwork_local = ConvQNetwork(state_size, action_size).to(device) # state_size == in_channels
@@ -45,7 +45,7 @@ class Agent:
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
 
         # Replay memory
-        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE)
+        self.memory = ReplayBuffer(network_type, action_size, BUFFER_SIZE, BATCH_SIZE)
         # Initialize time step (for updating every UPDATE_EVERY steps)
         self.t_step = 0
 
@@ -145,7 +145,7 @@ class Agent:
 class ReplayBuffer:
     """Fixed-size buffer to store experience tuples."""
 
-    def __init__(self, action_size, buffer_size, batch_size):
+    def __init__(self, network_type, action_size, buffer_size, batch_size):
         """Initialize a ReplayBuffer object.
 
         Params
@@ -154,6 +154,7 @@ class ReplayBuffer:
             buffer_size (int): maximum size of buffer
             batch_size (int): size of each training batch
         """
+        self.network_type = network_type
         self.action_size = action_size
         self.memory = deque(maxlen=buffer_size)
         self.batch_size = batch_size
@@ -193,14 +194,20 @@ class ReplayBuffer:
     def __v_stack_impr(self, values):
         #sub_dim = len(values[0][0]) if isinstance(values[0], Iterable) else 1
         # values are actually states (not actions, or rewards...)
-        if isinstance(values[0], Iterable):
-            sub_dim = len(values[0][0])
-            # Create a 1d array of states and reshape it into (batch_size, in_channels, view_width, view_height)
-            # 'states' is a list containing batch_size arrays of shape (1, in_channels, view_width, view_height)
-            np_values = np.reshape(np.array(values), (len(values), sub_dim, 15,  30)) # TODO add param env_width env_height
-        else:  # values are actions or rewards...
-            sub_dim = 1
-            # Create a 1d array of values and reshape it into (batch_size, in_channels)
+        if self.network_type == 'fc':
+            sub_dim = len(values[0][0]) if isinstance(values[0], Iterable) else 1
             np_values = np.reshape(np.array(values), (len(values), sub_dim))
+            return np_values
+            
+        elif self.network_type == 'conv':
+            if isinstance(values[0], Iterable):
+                sub_dim = len(values[0][0])
+                # Create a 1d array of states and reshape it into (batch_size, in_channels, view_width, view_height)
+                # 'states' is a list containing batch_size arrays of shape (1, in_channels, view_width, view_height)
+                np_values = np.reshape(np.array(values), (len(values), sub_dim, 15,  30)) # TODO add param env_width env_height
+            else:  # values are actions or rewards...
+                sub_dim = 1
+                # Create a 1d array of values and reshape it into (batch_size, in_channels)
+                np_values = np.reshape(np.array(values), (len(values), sub_dim))
 
         return np_values

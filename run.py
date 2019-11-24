@@ -23,7 +23,7 @@ observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPred
 
 state_size = prediction_depth + 3
 network_action_size = 2
-controller = Agent("FC", state_size, network_action_size)
+controller = Agent('fc', state_size, network_action_size)
 railenv_action_dict = dict()
 
 

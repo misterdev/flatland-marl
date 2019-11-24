@@ -45,13 +45,13 @@ observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPred
 
 state_size = prediction_depth + 3
 network_action_size = 2
-controller = Agent(state_size, network_action_size)
+controller = Agent('fc', state_size, network_action_size)
 network_action_dict = dict()
 railenv_action_dict = dict()
 
 
 # Here you can pre-load an agent
-with path(src.nets, "avoid_checkpoint300.pth") as file_in:
+with path(src.nets, "avoid_checkpoint200NEW.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
 
 for test in tests:
@@ -115,13 +115,13 @@ for test in tests:
     next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
 
     for step in range(max_time_steps - 1):
-        '''
-        print('\rTest: {}\t Step / MaxSteps: {} / {}\n'.format(
+        
+        print('\rTest: {}\t Step / MaxSteps: {} / {}'.format(
             test,
             step+1,
             max_time_steps
         ), end=" ")
-        '''
+        
         '''
         for agent_idx, agent in enumerate(env.agents):
             print(
@@ -142,14 +142,14 @@ for test in tests:
                 
             railenv_action_dict.update({a: railenv_action})
             network_action_dict.update({a: network_action})
-        
+        '''
         for a in (1,5):
             print('#########################################')
             print('Info for agent {}'.format(a))
             print('State: {}'.format(observations[a]))
             print('Network action: {}'.format(network_action_dict[a]))
             print('Railenv action: {}'.format(railenv_action_dict[a]))
-        
+        '''
             
         # Environment step which returns the observations for all agents, their corresponding
         # reward and whether their are done

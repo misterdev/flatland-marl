@@ -77,7 +77,6 @@ class LocalObsForRailEnv(ObservationBuilder):
 
     def get(self, handle: int = 0) -> (np.ndarray, np.ndarray, np.ndarray):
         """
-        
         :param handle: 
         :return: local obs for handle agent, None if agent has status DONE_REMOVED
         """
@@ -101,13 +100,6 @@ class LocalObsForRailEnv(ObservationBuilder):
         
         # Get local rail_obs
         local_rail_obs = np.zeros((self.view_height, self.view_width, 16))
-        '''
-        for i in range(self.view_height):
-            for j in range(self.view_width):
-                pos = visible_cells[i,j]
-                if pos is not -np.inf:
-                    local_rail_obs[i, j] = self.rail_obs[pos[0], pos[1]]
-        '''
         # Build agents obs
         agents_state_obs = np.zeros((self.view_height, self.view_width, 5))
         # Build targets obs
@@ -149,12 +141,14 @@ class LocalObsForRailEnv(ObservationBuilder):
         self.shortest_paths = get_shortest_paths(self.env.distance_map)
         return super().get_many(handles)
     
-    '''
-    Given agent current position and direction, returns the field of view of the agent as np.array of cells on the grid in
-    absolute coordinates. Value is -np.inf to indicate padding (when agent lies on border).
-    '''
+
     def _field_of_view(self, position, direction):
-        
+        """
+        :param position: current agent position as tuple (y, x)
+        :param direction: current agent direction in [0, 3]
+        :return: Field of view of the agent as np.array of cells on the grid in absolute coordinates. 
+        Value is -np.inf to indicate padding (when agent lies on border).
+        """
         # Compute visible cells
         # visible_cells = np.full((self.view_height, self.view_width, 2), -np.inf, dtype=int)
         visible_cells = list()
@@ -192,19 +186,20 @@ class LocalObsForRailEnv(ObservationBuilder):
     
     def _find_subtarget(self, handle, visible_cells):
         """
-        
         :param handle: agent id, 
-                visible_cells: pos (y, x) of visible cells for agent in absolute coordinates
+        :param visible_cells: pos (y, x) of visible cells for agent in absolute coordinates
         :return: cell in the shortest path of this agent (handle) that is closest to target and visible to the agent 
         (i.e. in its field of view). Equal to real target when already visible.
+        None if shortest_path for this agent couldn't be computed (e.g. rail was disconnected).
         """
-        if self.shortest_paths is not None:
+        if self.shortest_paths:
             # Get shortest path
             shortest_path = self.shortest_paths[handle]
             # Walk path from target to source to find first pos that is in view
-            for i in range(len(shortest_path) - 1, -1, -1):
-                cell = shortest_path[i][0]
-                if cell in visible_cells: # Not really efficient
-                    return cell
-        else:
-            return None
+            if shortest_path:
+                for i in range(len(shortest_path) - 1, -1, -1):
+                    cell = shortest_path[i][0]
+                    if cell in visible_cells: # Not really efficient
+                        return cell
+        
+        return None
