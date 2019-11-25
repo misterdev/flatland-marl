@@ -60,7 +60,7 @@ def main(args):
         prediction_depth = args.prediction_depth
         bfs_depth = args.bfs_depth
         observation_builder = GraphObsForRailEnv(bfs_depth=bfs_depth, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
-        state_size = args.prediction_depth + 3
+        state_size = args.prediction_depth + 5
         network_action_size = 2  # {follow path, stop}
         railenv_action_size = 5  # The RailEnv possible actions
         agent = Agent(network_type='fc', state_size=state_size, action_size=network_action_size)
@@ -85,10 +85,10 @@ def main(args):
     env.reset()
 
     # max_steps = env.compute_max_episode_steps(args.width, args.height, args.num_agents/args.max_num_cities)
-    max_steps = 200 # TODO DEBUG
+    max_steps = 300 # TODO DEBUG
     eps = 1.
     eps_end = 0.005
-    eps_decay = 0.9995
+    eps_decay = 0.998
     # Need to have two since env works with RailEnv actions but agent works with network actions
     network_action_dict = dict()
     railenv_action_dict = dict()
@@ -110,6 +110,10 @@ def main(args):
             for a in range(env.get_num_agents()):
                 agent_obs[a] = obs[a].copy()
                 agent_obs_buffer[a] = agent_obs[a].copy()
+            for a in range(env.get_num_agents()):
+                action = np.random.choice(np.arange(3))
+                railenv_action_dict.update({a: action})  # All'inizio faccio partire a random TODO Prova
+            next_obs, all_rewards, done, info = env.step(railenv_action_dict)
         # Normalize obs, only for LocalObs now
         elif args.observation_builder == 'LocalObsForRailEnv':       
             for a in range(env.get_num_agents()):
@@ -218,7 +222,7 @@ def main(args):
                 eps,
                 formatted_action_prob), end=" ")
 
-        if ep % 100 == 0:
+        if ep % 50 == 0:
             print(
                 '\rTraining {} Agents.\t Episode {}\t Average Score: {:.3f}\tDones: {:.2f}%\tEpsilon: {:.2f} \t Action Probabilities: \t {}'.format(
                     env.get_num_agents(),

@@ -12,32 +12,36 @@ Ideas:
     - give priority to agent that have the shortest path "free", aka with less possible conflicts
 
 '''
-# TODO Improve
-
 
 def assign_random_priority(num_agents):
+    """
+    
+    :param num_agents: 
+    :return: 
+    """
     priorities = np.random.choice(range(num_agents), num_agents, replace=False)
 
     return priorities
 
-
-'''
-Priority is assigned according to agent speed and it is fixed.
-max_priority: 1 (fast passenger train)
-min_priority: 1/4 (slow freight train)
-
-'''
-# TODO ???
-
 def assign_speed_priority(agent):
-
+    """
+    Priority is assigned according to agent speed and it is fixed.
+    max_priority: 1 (fast passenger train)
+    min_priority: 1/4 (slow freight train)
+    :param agent: 
+    :return: 
+    """
     priority = agent.speed_data.speed
     return priority
 
-
-if __name__ == "__main__":
-    prios = assign_random_priority(5)
-    print(prios)
+def assign_id_priority(handle):
+    """
+    Assign priority according to agent id (lower id means higher priority).
+    :param agent: 
+    :return: 
+    """
+    return handle
+    
 
 def preprocess_obs(obs):
     """Preprocess local observations before feeding to the conv network"""

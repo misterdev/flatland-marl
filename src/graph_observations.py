@@ -32,6 +32,9 @@ from src.utils import assign_random_priority, assign_speed_priority
 
 
 class GraphObsForRailEnv(ObservationBuilder):
+    """
+    Build graph observations.
+    """
 
     Node = collections.namedtuple('Node',
                                   'cell_position '  # Cell position (x, y)
@@ -48,6 +51,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         self.predicted_pos_coord = {}  # Dict ts : coord_pos_list
         self.predicted_dir = {}  # Dict ts : dir (float)
         self.num_active_agents = 0
+        self.cells_sequence = None
 
     def set_env(self, env: Environment):
         super().set_env(env)
@@ -56,10 +60,19 @@ class GraphObsForRailEnv(ObservationBuilder):
             self.predictor.set_env(self.env)
 
     def reset(self):
+        """
+        Inherited method used for pre computations.
+        :return: 
+        """
         
         pass
 
     def get_many(self, handles: Optional[List[int]] = None) -> {}:
+        """
+        Compute observations for all agents in the env.
+        :param handles: 
+        :return: 
+        """
         
         self.num_active_agents = 0
         for a in self.env.agents:
@@ -88,37 +101,31 @@ class GraphObsForRailEnv(ObservationBuilder):
             observations[a] = self.get(a)
         return observations
 
-    '''
-    Returns obs for one agent, obs are a single array of concatenated values representing:
-    - occupancy of next prediction_depth cells,, 
-    - agent priority/speed,
-    - number of malfunctioning agents (encountered),
-    - number of agents that are ready to depart (encountered).
-    '''
+
     # TODO At the moment bfs_graph is not used (but can be used for path search if shortest path strategy fails)
     # TODO We may need some normalization depending on the type of data that the part of obs represents
     # TODO agent_obs needs to take into consideration only encountered agents, not all
     def get(self, handle: int = 0) -> {}:
+        """
+        Returns obs for one agent, obs are a single array of concatenated values representing:
+        - occupancy of next prediction_depth cells,, 
+        - agent priority/speed,
+        - number of malfunctioning agents (encountered),
+        - number of agents that are ready to depart (encountered).
+        :param handle: 
+        :return: 
+        """
 
         bfs_graph = self._bfs_graph(handle)
         agents = self.env.agents
         # Debug - Visualize paths that are overlapping
-        '''
-        for a in agents:
-            print(str(a.handle) + ": ", end='')
-            for cell in cells_sequence[a.handle]:
-                print(str(cell) + " ", end='')
-            print()
-        '''
-        # Occupancy obs
-        occupancy = self._fill_occupancy(handle)
-        # Priority obs
-        priority = 0.
-        # An agent that is malfunctioning has no priority
-        if agents[handle].malfunction_data['malfunction'] == 0:
-            priority = agents[handle].speed_data['speed']
 
-        # Malfunctioning obs: malfunction, malfunction_rate, next_malfunction, nr_malfunctions
+        # Occupancy and speed/priority
+        occupancy, min_speed_encountered = self._fill_occupancy(handle)
+        agent_speed = agents[handle].speed_data['speed']
+        priority = handle
+        
+        # Malfunctioning obs
         # Counting number of agents that are currently malfunctioning (globally) - experimental
         n_agents_malfunctioning = 0  # in TreeObs they store the length of the longest malfunction encountered
         for a in agents:
@@ -130,20 +137,23 @@ class GraphObsForRailEnv(ObservationBuilder):
         for a in agents:
             if a.status in [RailAgentStatus.READY_TO_DEPART]:
                 n_agents_ready_to_depart += 1  # Considering ALL agents
-        # shape (prediction_depth + 3, )
-        agent_obs = np.append(occupancy, (priority, n_agents_malfunctioning, n_agents_ready_to_depart))
+        # shape (prediction_depth + 4, )
+        agent_obs = np.append(occupancy, (priority, agent_speed, min_speed_encountered, n_agents_malfunctioning, n_agents_ready_to_depart))
         
         # With this obs the agent actually decided only if it has to move or stop
         return agent_obs
     
-    '''
-    Takes an agent handle and returns next action for that agent following shortest path:
-    - if agent status == READY_TO_DEPART => agent moves forward;
-    - if agent status == ACTIVE => pick action using shortest_path() fun available in prediction utils;
-    - if agent status == DONE => agent does nothing.
-    '''
+
     # TODO Stop when shortest_path() says that rail is disrupted 
     def _get_shortest_path_action(self, handle):
+        """
+        Takes an agent handle and returns next action for that agent following shortest path:
+        - if agent status == READY_TO_DEPART => agent moves forward;
+        - if agent status == ACTIVE => pick action using shortest_path() fun available in prediction utils;
+        - if agent status == DONE => agent does nothing.
+        :param handle: 
+        :return: 
+        """
 
         agent = self.env.agents[handle]
 
@@ -154,6 +164,7 @@ class GraphObsForRailEnv(ObservationBuilder):
                 action = RailEnvActions.MOVE_FORWARD
             else:
                 action = RailEnvActions.DO_NOTHING
+            
 
         elif agent.status == RailAgentStatus.ACTIVE:
             # This can return None when rails are disconnected or there was an error in the DistanceMap
@@ -184,23 +195,29 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         return action
     
-    '''
-    Choose action to perform from RailEnvActions, namely follow shortest path or stop if DQN network said so.
-    '''
+
     def choose_railenv_action(self, handle, network_action):
+        """
+        Choose action to perform from RailEnvActions, namely follow shortest path or stop if DQN network said so.
+
+        :param handle: 
+        :param network_action: 
+        :return: 
+        """
         
-        shortest_path_action = self._get_shortest_path_action(handle)     
         if network_action == 1:
             return RailEnvActions.STOP_MOVING
         else:
-            return shortest_path_action
+            return self._get_shortest_path_action(handle)  
         
     
-    '''
-    Build a graph (dict) of nodes, where nodes are identified by ids, graph is directed, depends on agent direction
-    (that are tuples that represent the cell position, eg (11, 23))
-    '''
     def _bfs_graph(self, handle: int = 0) -> {}:
+        """
+        Build a graph (dict) of nodes, where nodes are identified by ids, graph is directed, depends on agent direction
+        (that are tuples that represent the cell position, eg (11, 23))
+        :param handle: 
+        :return: 
+        """
         obs_graph = defaultdict(list)  # dict
         visited_nodes = set()  # set
         bfs_queue = []
@@ -273,10 +290,15 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         return obs_graph
     
-    '''
-    Given agent handle, current position, and direction, explore that path until a new branching point is found.
-    '''
+
     def _explore_path(self, handle, position, direction):
+        """
+        Given agent handle, current position, and direction, explore that path until a new branching point is found.
+        :param handle: 
+        :param position: 
+        :param direction: 
+        :return: 
+        """
 
         # Continue along direction until next switch or
         # until no transitions are possible along the current direction (i.e., dead-ends)
@@ -337,69 +359,122 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         return node
 
-    '''
-    Function that given agent (as handle) and time step, returns a counter that represents the sum of possible conflicts with
-    other agents.
-    Possible conflict is computed considering time step (current, pre and stop), direction, and possibility to enter that cell
-    in opposite direction (w.r.t. to current agent).
-    Precondition: 0 <= ts <= self.max_prediction_depth - 1
-    '''
-    # TODO Improve notion of conflict, should consider also branching?
-
+    
     def _possible_conflict(self, handle, ts):
-
-            occupancy_counter = 0
-            #cell_pos = self.predictor.compute_cells_sequence(self.prediction_dict)[handle][ts]
-            #int_pos = coordinate_to_position(self.env.width, [cell_pos])
-            cell_pos = self.predicted_pos_coord[ts][handle]
-            int_pos = self.predicted_pos[ts][handle]
-            pre_ts = max(0, ts - 1)
-            post_ts = min(self.max_prediction_depth - 1, ts + 1)
-            int_direction = int(self.predicted_dir[ts][handle])
-            cell_transitions = self.env.rail.get_transitions(int(cell_pos[0]), int(cell_pos[1]), int_direction)
-
-            '''
-            if cell_pos == possible_overlapping_sequence[ts] or cell_pos == possible_overlapping_sequence[pre_ts] or int_pos == possible_overlapping_sequence[post_ts]:
-                return 1
-            '''
-            # Careful, int_pos, predicted_pos are not (y, x) but are given as int
-            if int_pos in np.delete(self.predicted_pos[ts], handle, 0):
-                conflicting_agents = np.where(self.predicted_pos[ts] == int_pos)
-                for ca in conflicting_agents[0]:
+        """
+        Function that given agent (as handle) and time step, returns a counter that represents the sum of possible conflicts with
+        other agents.
+        Possible conflict is computed considering time step (current, pre and stop), direction, and possibility to enter that cell
+        in opposite direction (w.r.t. to current agent).
+        Precondition: 0 <= ts <= self.max_prediction_depth - 1.
+        Exclude READY_TO_DEPART agents from this count, namely check conflicts only with agents that are already active.
+        """
+        occupancy_counter = 0
+        min_speed_encountered = 0
+        update_min_speed = True
+        cell_pos = self.predicted_pos_coord[ts][handle]
+        int_pos = self.predicted_pos[ts][handle]
+        pre_ts = max(0, ts - 1)
+        post_ts = min(self.max_prediction_depth - 1, ts + 1)
+        int_direction = int(self.predicted_dir[ts][handle])
+        cell_transitions = self.env.rail.get_transitions(int(cell_pos[0]), int(cell_pos[1]), int_direction)
+    
+        # Careful, int_pos, predicted_pos are not (y, x) but are given as int
+        if int_pos in np.delete(self.predicted_pos[ts], handle, 0):
+            conflicting_agents = np.where(self.predicted_pos[ts] == int_pos)
+            for ca in conflicting_agents[0]:
+                if self.env.agents[ca].status == RailAgentStatus.ACTIVE:
                     if self.predicted_dir[ts][handle] != self.predicted_dir[ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[ts][ca])] == 1:
                         occupancy_counter += 1
-                        
-            elif int_pos in np.delete(self.predicted_pos[pre_ts], handle, 0):
-                conflicting_agents = np.where(self.predicted_pos[pre_ts] == int_pos)
-                for ca in conflicting_agents[0]:
+                        if self.env.agents[ca].speed_data['speed'] < min_speed_encountered or update_min_speed:
+                            min_speed_encountered = self.env.agents[ca].speed_data['speed']
+                            update_min_speed = False
+                    
+        elif int_pos in np.delete(self.predicted_pos[pre_ts], handle, 0):
+            conflicting_agents = np.where(self.predicted_pos[pre_ts] == int_pos)
+            for ca in conflicting_agents[0]:
+                if self.env.agents[ca].status == RailAgentStatus.ACTIVE:
                     if self.predicted_dir[ts][handle] != self.predicted_dir[pre_ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[pre_ts][ca])] == 1:
                         occupancy_counter += 1
-                        
-            elif int_pos in np.delete(self.predicted_pos[post_ts], handle, 0):
-                conflicting_agents = np.where(self.predicted_pos[post_ts] == int_pos)
-                for ca in conflicting_agents[0]:
+                        if self.env.agents[ca].speed_data['speed'] < min_speed_encountered or update_min_speed:
+                            min_speed_encountered = self.env.agents[ca].speed_data['speed']
+                            update_min_speed = False
+                            
+        elif int_pos in np.delete(self.predicted_pos[post_ts], handle, 0):
+            conflicting_agents = np.where(self.predicted_pos[post_ts] == int_pos)
+            for ca in conflicting_agents[0]:
+                if self.env.agents[ca].status == RailAgentStatus.ACTIVE:
                     if self.predicted_dir[ts][handle] != self.predicted_dir[post_ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[post_ts][ca])] == 1:
                         occupancy_counter += 1
-                        
-            return occupancy_counter
+                        if self.env.agents[ca].speed_data['speed'] < min_speed_encountered or update_min_speed:
+                            min_speed_encountered = self.env.agents[ca].speed_data['speed']
+                            update_min_speed = False
+                            
+        return occupancy_counter, min_speed_encountered
 
-    '''
-    Returns encoding of agent occupancy as an array where each element is
-    0: no other agent in this cell at this ts
-    >= 1: counter (probably) other agents here at the same ts, so conflict, e.g. if 1 => one possible conflict, 2 => 2 possible conflicts, etc.
-    '''
+
     def _fill_occupancy(self, handle):
-
+        """
+        Returns encoding of agent occupancy as an array where each element is
+        0: no other agent in this cell at this ts
+        >= 1: counter (probably) other agents here at the same ts, so conflict, e.g. if 1 => one possible conflict, 2 => 2 possible conflicts, etc.
+        :param handle: 
+        :return: 
+        """
         occupancy = np.zeros(self.max_prediction_depth - 1)
+        min_speed = 0.
+        overlapping_paths = self._compute_overlapping_paths(handle)
+        update_min_speed = True
 
         for ts in range(0, self.max_prediction_depth - 1):
             if self.env.agents[handle].status != RailAgentStatus.DONE_REMOVED:
-                occupancy[ts] = self._possible_conflict(handle, ts)
+                # min_speed_encountered can be 0 (no conflicts found) or an int > 0 and < 1
+                occupancy[ts], min_speed_encountered = self._possible_conflict(handle, ts)
+                if occupancy[ts] and (min_speed_encountered < min_speed or update_min_speed):
+                    min_speed = min_speed_encountered
+                    update_min_speed = False
+        # If a conflict is predicted, then it makes sense to populate occupancy with overlapping paths
+        # Because I could have overlapping paths but without conflict (TODO improve)
+        if np.any(occupancy):
+            for i in range(self.max_prediction_depth - 1):
+                if overlapping_paths[i] == 1:
+                    occupancy[i] = 1
+
         # Occupancy is 0 for agents that were removed (doesn't matter because they don't perform actions anymore)
-        return occupancy
+        return occupancy, min_speed
     
-    '''
-    Invert direction (int) of one agent.
-    '''
+
     def _reverse_dir(self, direction):
+        """
+        Invert direction (int) of one agent.
+        :param direction: 
+        :return: 
+        """
         return int((direction + 2) % 4)
+    
+    def _compute_overlapping_paths(self, handle):
+        """
+        
+        :param handle: 
+        :return: 
+        """
+        overlapping_paths = np.zeros(self.max_prediction_depth) # -1?
+        # Move somewhere else
+        predicted_pos = {} # Dict handle : lists of pos
+        for a in range(len(self.env.agents)):
+            pos_list = []
+            for ts in range(self.max_prediction_depth):
+                pos_list.append(self.predicted_pos[ts][a]) # Use int positions
+            predicted_pos.update({a:pos_list})
+        
+        cells_sequence = predicted_pos[handle]
+        for a in range(len(self.env.agents)): # Now he's checking with all the agents without differentiating
+            if a != handle:
+                i = 0
+                other_agent_cells_sequence = predicted_pos[a]
+                for pos in cells_sequence:
+                    if pos in other_agent_cells_sequence:
+                        overlapping_paths[i] = 1
+                    i += 1
+        return overlapping_paths
+    
