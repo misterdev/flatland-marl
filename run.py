@@ -21,13 +21,13 @@ prediction_depth = 40
 observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
 
 
-state_size = prediction_depth + 3
+state_size = prediction_depth + 5
 network_action_size = 2
 controller = Agent('fc', state_size, network_action_size)
 railenv_action_dict = dict()
 
 
-with path(src.nets, "avoid_checkpoint100NEW.pth") as file_in:
+with path(src.nets, "exp_graph_obs_4_prio100.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
     
 evaluation_number = 0
@@ -50,17 +50,25 @@ while True:
     time_taken_by_controller = []
     time_taken_per_step = []
     steps = 0
-    
+    # First random action
+    for a in range(number_of_agents):
+        action = 2
+        railenv_action_dict.update({a:action})
+    obs, all_rewards, done, info = remote_client.env_step(railenv_action_dict)
+
     while True:
         # Evaluation of a single episode
     
         time_start = time.time()
         # Pick actions
         for a in range(number_of_agents):
-            network_action = controller.act(obs[a])
-            railenv_action = observation_builder.choose_railenv_action(a, network_action)
+            if info['action_required'][a]:
+                network_action = controller.act(obs[a])
+                railenv_action = observation_builder.choose_railenv_action(a, network_action)
+            else:
+                railenv_action = 0
             railenv_action_dict.update({a: railenv_action})
-            
+                
         time_taken = time.time() - time_start
         time_taken_by_controller.append(time_taken)
 
