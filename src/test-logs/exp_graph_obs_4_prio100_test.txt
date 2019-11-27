@@ -1,0 +1,14 @@
+Test: Test-6	 Agent Dones: 50.0%	 Score: -380.8333333333337
+Test: Test-5	 Agent Dones: 50.0%	 Score: -357.33333333333246
+Test: Test-4	 Agent Dones: 100.0%	 Score: -186.33333333333348
+Test: Test-3	 Agent Dones: 50.0%	 Score: -330.6666666666665
+Test: Test-2	 Agent Dones: 60.0%	 Score: -1141.1666666666704
+Test: Test-1	 Agent Dones: 20.0%	 Score: -1140.0000000000034
+Test: Test0	     Agent Dones: 40.0%	 Score: -1030.8333333333376
+Test: Test1	     Agent Dones: 30.0%	 Score: -1019.6666666666696
+Test: Test2	     Agent Dones: 30.0%	 Score: -827.6666666666711
+Test: Test3	     Agent Dones: 100.0%	 Score: -414.83333333333104
+Test: Test4	     Agent Dones: 30.0%	 Score: -957.6666666666731
+Test: Test5	     Agent Dones: 50.0%	 Score: -675.1666666666684
+Test: Test6	     Agent Dones: 30.0%	 Score: -1037.166666666673
+Test: Test7	     Agent Dones: 40.0%	 Score: -890.6666666666723

@@ -25,10 +25,10 @@ from flatland.envs.distance_map import DistanceMap
 from flatland.envs.rail_env import RailEnvNextAction, RailEnvActions
 from flatland.envs.rail_env_shortest_paths import get_valid_move_actions_#, get_action_for_move
 from flatland.core.grid.grid4_utils import get_new_position
-from flatland.core.grid.grid_utils import coordinate_to_position
+from flatland.core.grid.grid_utils import coordinate_to_position, distance_on_rail
 
 from src.draw_obs_graph import build_graph
-from src.utils import assign_random_priority, assign_speed_priority
+from src.utils import assign_random_priority, assign_speed_priority, assign_priority
 
 
 class GraphObsForRailEnv(ObservationBuilder):
@@ -104,7 +104,6 @@ class GraphObsForRailEnv(ObservationBuilder):
 
     # TODO At the moment bfs_graph is not used (but can be used for path search if shortest path strategy fails)
     # TODO We may need some normalization depending on the type of data that the part of obs represents
-    # TODO agent_obs needs to take into consideration only encountered agents, not all
     def get(self, handle: int = 0) -> {}:
         """
         Returns obs for one agent, obs are a single array of concatenated values representing:
@@ -118,12 +117,16 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         bfs_graph = self._bfs_graph(handle)
         agents = self.env.agents
-        # Debug - Visualize paths that are overlapping
+        agent = agents[handle]
 
         # Occupancy and speed/priority
-        occupancy, min_speed_encountered = self._fill_occupancy(handle)
-        agent_speed = agents[handle].speed_data['speed']
-        priority = handle
+        occupancy, conflicting_agents = self._fill_occupancy(handle)
+        is_conflict = True if np.any(occupancy) else False
+        priority = assign_priority(self.env, agent, is_conflict)
+        max_prio_encountered = 0
+        if is_conflict:
+            conflicting_agents_priorities = [assign_priority(self.env, agents[ca], True) for ca in conflicting_agents]
+            max_prio_encountered = np.min(conflicting_agents_priorities)  # Max prio is the one with lowest value
         
         # Malfunctioning obs
         # Counting number of agents that are currently malfunctioning (globally) - experimental
@@ -138,7 +141,9 @@ class GraphObsForRailEnv(ObservationBuilder):
             if a.status in [RailAgentStatus.READY_TO_DEPART]:
                 n_agents_ready_to_depart += 1  # Considering ALL agents
         # shape (prediction_depth + 4, )
-        agent_obs = np.append(occupancy, (priority, agent_speed, min_speed_encountered, n_agents_malfunctioning, n_agents_ready_to_depart))
+        # TODO Prova: tolgo il primo ts in occupancy
+        occupancy_up = occupancy[1:]
+        agent_obs = np.append(occupancy_up, (priority, max_prio_encountered, n_agents_malfunctioning, n_agents_ready_to_depart))
         
         # With this obs the agent actually decided only if it has to move or stop
         return agent_obs
@@ -370,14 +375,13 @@ class GraphObsForRailEnv(ObservationBuilder):
         Exclude READY_TO_DEPART agents from this count, namely check conflicts only with agents that are already active.
         """
         occupancy_counter = 0
-        min_speed_encountered = 0
-        update_min_speed = True
         cell_pos = self.predicted_pos_coord[ts][handle]
         int_pos = self.predicted_pos[ts][handle]
         pre_ts = max(0, ts - 1)
         post_ts = min(self.max_prediction_depth - 1, ts + 1)
         int_direction = int(self.predicted_dir[ts][handle])
         cell_transitions = self.env.rail.get_transitions(int(cell_pos[0]), int(cell_pos[1]), int_direction)
+        conflicting_agents_set = set()
     
         # Careful, int_pos, predicted_pos are not (y, x) but are given as int
         if int_pos in np.delete(self.predicted_pos[ts], handle, 0):
@@ -386,9 +390,7 @@ class GraphObsForRailEnv(ObservationBuilder):
                 if self.env.agents[ca].status == RailAgentStatus.ACTIVE:
                     if self.predicted_dir[ts][handle] != self.predicted_dir[ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[ts][ca])] == 1:
                         occupancy_counter += 1
-                        if self.env.agents[ca].speed_data['speed'] < min_speed_encountered or update_min_speed:
-                            min_speed_encountered = self.env.agents[ca].speed_data['speed']
-                            update_min_speed = False
+                        conflicting_agents_set.add(ca)
                     
         elif int_pos in np.delete(self.predicted_pos[pre_ts], handle, 0):
             conflicting_agents = np.where(self.predicted_pos[pre_ts] == int_pos)
@@ -396,9 +398,7 @@ class GraphObsForRailEnv(ObservationBuilder):
                 if self.env.agents[ca].status == RailAgentStatus.ACTIVE:
                     if self.predicted_dir[ts][handle] != self.predicted_dir[pre_ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[pre_ts][ca])] == 1:
                         occupancy_counter += 1
-                        if self.env.agents[ca].speed_data['speed'] < min_speed_encountered or update_min_speed:
-                            min_speed_encountered = self.env.agents[ca].speed_data['speed']
-                            update_min_speed = False
+                        conflicting_agents_set.add(ca)
                             
         elif int_pos in np.delete(self.predicted_pos[post_ts], handle, 0):
             conflicting_agents = np.where(self.predicted_pos[post_ts] == int_pos)
@@ -406,11 +406,9 @@ class GraphObsForRailEnv(ObservationBuilder):
                 if self.env.agents[ca].status == RailAgentStatus.ACTIVE:
                     if self.predicted_dir[ts][handle] != self.predicted_dir[post_ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[post_ts][ca])] == 1:
                         occupancy_counter += 1
-                        if self.env.agents[ca].speed_data['speed'] < min_speed_encountered or update_min_speed:
-                            min_speed_encountered = self.env.agents[ca].speed_data['speed']
-                            update_min_speed = False
+                        conflicting_agents_set.add(ca)
                             
-        return occupancy_counter, min_speed_encountered
+        return occupancy_counter, conflicting_agents_set
 
 
     def _fill_occupancy(self, handle):
@@ -422,26 +420,25 @@ class GraphObsForRailEnv(ObservationBuilder):
         :return: 
         """
         occupancy = np.zeros(self.max_prediction_depth - 1)
-        min_speed = 0.
+        conflicting_agents = set()
         overlapping_paths = self._compute_overlapping_paths(handle)
-        update_min_speed = True
 
         for ts in range(0, self.max_prediction_depth - 1):
             if self.env.agents[handle].status != RailAgentStatus.DONE_REMOVED:
                 # min_speed_encountered can be 0 (no conflicts found) or an int > 0 and < 1
-                occupancy[ts], min_speed_encountered = self._possible_conflict(handle, ts)
-                if occupancy[ts] and (min_speed_encountered < min_speed or update_min_speed):
-                    min_speed = min_speed_encountered
-                    update_min_speed = False
-        # If a conflict is predicted, then it makes sense to populate occupancy with overlapping paths
-        # Because I could have overlapping paths but without conflict (TODO improve)
-        if np.any(occupancy):
-            for i in range(self.max_prediction_depth - 1):
-                if overlapping_paths[i] == 1:
-                    occupancy[i] = 1
+                occupancy[ts], conflicting_agents_ts = self._possible_conflict(handle, ts)
+                conflicting_agents.update(conflicting_agents_ts)
 
+        # If a conflict is predicted, then it makes sense to populate occupancy with overlapping paths
+        # But only with THAT agent
+        # Because I could have overlapping paths but without conflict (TODO improve)
+        if len(conflicting_agents) != 0: # If there was conflict
+            for ca in conflicting_agents:
+                for ts in range(self.max_prediction_depth - 1):
+                    occupancy[ts] = overlapping_paths[ca, ts]  if occupancy[ts] == 0 else 1# e.g. 2 means that other 2 agents are conflicting and overlap there
+            
         # Occupancy is 0 for agents that were removed (doesn't matter because they don't perform actions anymore)
-        return occupancy, min_speed
+        return occupancy, conflicting_agents
     
 
     def _reverse_dir(self, direction):
@@ -456,9 +453,9 @@ class GraphObsForRailEnv(ObservationBuilder):
         """
         
         :param handle: 
-        :return: 
+        :return: overlapping_paths is a np.array that computes path overlapping for pairs of agents
         """
-        overlapping_paths = np.zeros(self.max_prediction_depth) # -1?
+        overlapping_paths = np.zeros((self.env.get_num_agents(), self.max_prediction_depth))
         # Move somewhere else
         predicted_pos = {} # Dict handle : lists of pos
         for a in range(len(self.env.agents)):
@@ -468,13 +465,13 @@ class GraphObsForRailEnv(ObservationBuilder):
             predicted_pos.update({a:pos_list})
         
         cells_sequence = predicted_pos[handle]
-        for a in range(len(self.env.agents)): # Now he's checking with all the agents without differentiating
+        for a in range(len(self.env.agents)):
             if a != handle:
                 i = 0
                 other_agent_cells_sequence = predicted_pos[a]
                 for pos in cells_sequence:
                     if pos in other_agent_cells_sequence:
-                        overlapping_paths[i] = 1
+                        overlapping_paths[a, i] = 1
                     i += 1
         return overlapping_paths
     

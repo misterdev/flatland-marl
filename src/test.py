@@ -2,6 +2,7 @@ import torch
 import sys
 import time
 import pprint
+import numpy as np
 # First of all we import the Flatland rail environment
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator, complex_rail_generator, rail_from_file
@@ -43,16 +44,16 @@ schedule_generator = sparse_schedule_generator(speed_ration_map)
 prediction_depth = 40
 observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
 
-state_size = prediction_depth + 3
+state_size = prediction_depth - 1 + 4
 network_action_size = 2
 controller = Agent('fc', state_size, network_action_size)
 network_action_dict = dict()
 railenv_action_dict = dict()
 
 
-# Here you can pre-load an agent
-with path(src.nets, "avoid_checkpoint200NEW.pth") as file_in:
+with path(src.nets, "exp_graph_obs_2100.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
+
 
 for test in tests:
     score = 0
@@ -78,7 +79,7 @@ for test in tests:
                         }),
                   remove_agents_at_target=True)
     
-    observations, infos = env.reset(True, True)
+    obs, info = env.reset(True, True)
 
     # Initiate the renderer
     env_renderer = RenderTool(env, 
@@ -89,9 +90,8 @@ for test in tests:
                               screen_width=1920)
 
     env_renderer.reset()
-    # TODO Change 'max_num_cities' to 'num_cities' (effective) when this info will be available
-    max_time_steps = int(4 * 2 * (config[test].as_int('width') + config[test].as_int('height') + config[test].as_int('num_agents') / config[test].as_int('max_num_cities')))
-    # max_time_steps = int(3 * (config[test].as_int('width') + config[test].as_int('height')))
+    #max_time_steps = env.compute_max_episode_steps(env.width, env.height)
+    max_time_steps = 150 # TODO DEBUG
     '''
     print("\nAgents in the environment have to solve the following tasks: \n")
     for agent_idx, agent in enumerate(env.agents):
@@ -101,18 +101,12 @@ for test in tests:
     for agent_idx, agent in enumerate(env.agents):
         print("Agent {} is: {} in (current) position {}".format(agent_idx, str(agent.status), str(agent.position)))
     '''
-    # Pick first action
+    # TODO A quanto pare è importante regolare l'entrata nell'ambiente
     for a in range(env.get_num_agents()):
-        # Agent performs action only if required
-        # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
-        network_action = controller.act(observations[a])
-        railenv_action = observation_builder.choose_railenv_action(a, network_action)
-        railenv_action_dict.update({a: railenv_action})
-        network_action_dict.update({a: network_action})
-        
-    #pprint.pprint(railenv_action_dict)
-    # Environment step
-    next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
+        #action = np.random.choice(np.arange(3))
+        action = 2
+        railenv_action_dict.update({a:action}) # All'inizio faccio partire a random
+    next_obs, all_rewards, done, info = env.step(railenv_action_dict)
 
     for step in range(max_time_steps - 1):
         
@@ -130,11 +124,10 @@ for test in tests:
         '''
         # Chose an action for each agent in the environment
         for a in range(env.get_num_agents()):
-            if infos['action_required'][a]:
+            if info['action_required'][a]:
                 # print('Agent {} needs to submit an action'.format(a))
-                # Agent performs action only if required
                 # 'railenv_action' is in [0, 4], network_action' is in [0, 1]
-                network_action = controller.act(observations[a])
+                network_action = controller.act(obs[a])
                 railenv_action = observation_builder.choose_railenv_action(a, network_action)
             else:
                 network_action = 0
@@ -142,24 +135,29 @@ for test in tests:
                 
             railenv_action_dict.update({a: railenv_action})
             network_action_dict.update({a: network_action})
-        '''
-        for a in (1,5):
+        
+        #for a in range(env.get_num_agents()):
+        
+        for a in (0, 1, 2, 3):
             print('#########################################')
             print('Info for agent {}'.format(a))
-            print('State: {}'.format(observations[a]))
+            print('Obs: {}'.format(obs[a]))
+            print('Status: {}'.format(info['status'][a]))
+            print('Moving? {} at speed: {}'.format(env.agents[a].moving, info['speed'][a]))
+            print('Action required? {}'.format(info['action_required'][a]))
             print('Network action: {}'.format(network_action_dict[a]))
             print('Railenv action: {}'.format(railenv_action_dict[a]))
-        '''
+        
             
         # Environment step which returns the observations for all agents, their corresponding
         # reward and whether their are done
-        next_obs, all_rewards, done, infos = env.step(railenv_action_dict)
-    
-        env_renderer.render_env(show=True, show_observations=False, show_predictions=False, selected_agent=3)
+        next_obs, all_rewards, done, info = env.step(railenv_action_dict)
+        env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
+        
         for a in range(env.get_num_agents()):
             score += all_rewards[a]
     
-        observations = next_obs.copy()
+        obs = next_obs.copy()
         if done['__all__']:
             break
             

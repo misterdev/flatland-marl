@@ -90,7 +90,9 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             visited = OrderedSet()
             for index in range(1, self.max_depth + 1):
                 # If we're at the target or not moving, stop moving until max_depth is reached
-                if new_position == agent.target or not agent.moving or not shortest_path:
+                # TODO Changing this to avoid stuck agent
+                #if new_position == agent.target or not agent.moving or not shortest_path:
+                if new_position == agent.target or not shortest_path:
                     prediction[index] = [index, *new_position, new_direction, RailEnvActions.STOP_MOVING]
                     visited.add((*new_position, agent.direction))
                     continue

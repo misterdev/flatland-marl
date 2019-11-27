@@ -60,7 +60,7 @@ def main(args):
         prediction_depth = args.prediction_depth
         bfs_depth = args.bfs_depth
         observation_builder = GraphObsForRailEnv(bfs_depth=bfs_depth, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
-        state_size = args.prediction_depth + 5
+        state_size = args.prediction_depth - 1 + 4 # TODO
         network_action_size = 2  # {follow path, stop}
         railenv_action_size = 5  # The RailEnv possible actions
         agent = Agent(network_type='fc', state_size=state_size, action_size=network_action_size)
