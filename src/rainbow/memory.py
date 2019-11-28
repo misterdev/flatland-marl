@@ -7,8 +7,9 @@ import torch
 
 Transition = namedtuple('Transition', ('timestep', 'state', 'action', 'reward', 'nonterminal'))
 blank_trans = Transition(0, torch.zeros(84, 84, dtype=torch.uint8), None, 0, False)
+# TODO The blank trans could be the problem that leads to red error!
 
-
+# Prioritized Replay Buffer uses sum-tree
 # Segment tree data structure where parent node values are sum/max of children node values
 class SegmentTree():
   def __init__(self, size):
@@ -77,6 +78,7 @@ class ReplayMemory():
 
   # Adds state and action at time t, reward and terminal at time t + 1
   def append(self, state, action, reward, terminal):
+    state = torch.from_numpy(state)
     state = state[-1].mul(255).to(dtype=torch.uint8, device=torch.device('cpu'))  # Only store last frame and discretise to save memory
     self.transitions.append(Transition(self.t, state, action, reward, not terminal), self.transitions.max)  # Store new transition with maximum priority
     self.t = 0 if terminal else self.t + 1  # Start new episodes with t = 0

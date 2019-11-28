@@ -13,6 +13,7 @@ from tqdm import trange
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
+from flatland.envs.malfunction_generators import malfunction_from_params
 # We also include a renderer because we want to visualize what is going on in the environment
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 
@@ -24,7 +25,6 @@ from src.rainbow.memory import ReplayMemory
 from src.rainbow.test import test
 
 
-# TODO Add also all the parameters related to the Flatland environment, maybe use gin-config
 # Hyperparameters
 parser = argparse.ArgumentParser(description='Rainbow')
 parser.add_argument('--id', type=str, default='default', help='Experiment ID')
@@ -60,18 +60,42 @@ parser.add_argument('--evaluation-episodes', type=int, default=10, metavar='N', 
 parser.add_argument('--evaluation-size', type=int, default=500, metavar='N', help='Number of transitions to use for validating Q')
 parser.add_argument('--render', action='store_true', help='Display screen (testing only)')
 parser.add_argument('--enable-cudnn', action='store_true', help='Enable cuDNN (faster but nondeterministic)')
-parser.add_argument('--checkpoint-interval', default=0, help='How often to checkpoint the model, defaults to 0 (never checkpoint)')
+parser.add_argument('--checkpoint-interval', type=int, default=0, help='How often to checkpoint the model, defaults to 0 (never checkpoint)')
 parser.add_argument('--memory', help='Path to save/load the memory from')
 parser.add_argument('--disable-bzip-memory', action='store_true', help='Don\'t zip the memory file. Not recommended (zipping is a bit slower and much, much smaller)')
-# Added by me
-parser.add_argument('--n_episodes', type=int, default=6000, help='Number of episodes to train the agent')
-
 
 # Env parameters
-parser.add_argument('--state_size', type=int, help='Size of state to feed to the NN')
+#parser.add_argument('--state_size', type=int, help='Size of state to feed to the neural network') # Depends on prediction_depth
+parser.add_argument('--network-action-space', type=int, default=2, help='Number of actions allowed in the environment')
+parser.add_argument('--width', type=int, default=100, help='Environment width')
+parser.add_argument('--height', type=int, default=100, help='Environment height')
+parser.add_argument('--num-agents', type=int, default=50, help='Number of agents in the environment')
+parser.add_argument('--max-num-cities', type=int, default=6, help='Maximum number of cities where agents can start or end')
+#parser.add_argument('--seed', type=int, default=1, help='Seed used to generate grid environment randomly')
+parser.add_argument('--grid-mode', type=bool, default=False, help='Type of city distribution, if False cities are randomly placed')
+parser.add_argument('--max-rails-between-cities', type=int, default=4, help='Max number of tracks allowed between cities, these count as entry points to a city')
+parser.add_argument('--max-rails-in-city', type=int, default=6, help='Max number of parallel tracks within a city allowed')
+parser.add_argument('--malfunction-rate', type=int, default=1000, help='Rate of malfunction occurrence of single agent')
+parser.add_argument('--min-duration', type=int, default=20, help='Min duration of malfunction')
+parser.add_argument('--max-duration', type=int, default=50, help='Max duration of malfunction')
+parser.add_argument('--observation-builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
+parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
+parser.add_argument('--bfs-depth', type=int, default=4, help='BFS depth of the graph observation')
+parser.add_argument('--prediction-depth', type=int, default=40, help='Prediction depth for shortest path strategy, i.e. length of a path')
+parser.add_argument('--view-semiwidth', type=int, default=7, help='Semiwidth of field view for agent in local obs')
+parser.add_argument('--view-height', type=int, default=30, help='Height of the field view for agent in local obs')
+parser.add_argument('--offset', type=int, default=25, help='Offset of agent in local obs')
+# Training parameters
+parser.add_argument('--num-episodes', type=int, default=1000, help='Number of episodes on which to train the agents')
 
 # Setup
 args = parser.parse_args()
+# Check arguments
+if args.offset > args.height:
+    raise ValueError("Agent offset can't be greater than view height in local obs")
+if args.offset < 0:
+    raise ValueError("Agent offset must be a positive integer")
+
 # Show options and values
 print(' ' * 26 + 'Options')
 for k, v in vars(args).items():
@@ -115,23 +139,13 @@ def save_memory(memory, memory_path, disable_bzip):
             pickle.dump(memory, zipped_pickle_file)
 
 
-width = 40
-height = 40
-nr_trains = 3  # Number of trains that have an assigned task in the env
-cities_in_map = 2  # Number of cities where agents can start or end
-seed = 1  # Random seed
-grid_distribution_of_cities = False  # Type of city distribution, if False cities are randomly placed
-max_rails_between_cities = 2  # Max number of tracks allowed between cities. This is number of entry point to a city
-max_rail_in_cities = 3  # Max number of parallel tracks within a city, representing a realistic train station
-
-
-rail_generator = sparse_rail_generator(max_num_cities=cities_in_map,
-                                       seed=seed,
-                                       grid_mode=grid_distribution_of_cities,
-                                       max_rails_between_cities=max_rails_between_cities,
-                                       max_rails_in_city=max_rail_in_cities,
+rail_generator = sparse_rail_generator(max_num_cities=args.max_num_cities,
+                                       seed=args.seed,
+                                       grid_mode=args.grid_mode,
+                                       max_rails_between_cities=args.max_rails_between_cities,
+                                       max_rails_in_city=args.max_rails_in_city,
                                        )
-# Maps speeds to % of appearance in the env TODO Find reasonable values
+# Maps speeds to % of appearance in the env
 speed_ration_map = {1.: 0.25,  # Fast passenger train
                     1. / 2.: 0.25,  # Fast freight train
                     1. / 3.: 0.25,  # Slow commuter train
@@ -145,24 +159,26 @@ stochastic_data = {'prop_malfunction': 0.3,  # Percentage of defective agents
                    'max_duration': 20  # Max duration of malfunction
                    }
 
-observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=10))
+observation_builder = GraphObsForRailEnv(bfs_depth=args.bfs_depth, predictor=ShortestPathPredictorForRailEnv(max_depth=args.prediction_depth))
 
 # Construct the environment with the given observation, generators, predictors, and stochastic data
-env = RailEnv(width=width,
-              height=height,
+env = RailEnv(width=args.width,
+              height=args.height,
               rail_generator=rail_generator,
               schedule_generator=schedule_generator,
-              number_of_agents=nr_trains,
-              stochastic_data=stochastic_data,  # Malfunction data generator
+              number_of_agents=args.num_agents,
               obs_builder_object=observation_builder,
+              malfunction_generator_and_process_data=malfunction_from_params(stochastic_data),
               remove_agents_at_target=True  # Removes agents at the end of their journey to make space for others
               )
 env.reset()
 
-action_space = 2
-action_dict = {}
+state_size = args.prediction_depth - 1 + 4 # TODO
+action_space = args.network_action_space
+network_action_dict = {}
+railenv_action_dict = {}
 # Init agent
-dqn = RainbowAgent(args, env)
+dqn = RainbowAgent(args, state_size, env)
 
 # If a model is provided, and evaluate is false, presumably we want to resume, so try to load memory
 if args.model is not None and not args.evaluate:
@@ -179,49 +195,74 @@ priority_weight_increase = (1 - args.priority_weight) / (args.T_max - args.learn
 
 val_mem = ReplayMemory(args, args.evaluation_size)
 T, done = 0, True
+update_values = [False] * env.get_num_agents() # Used to update agent if action was performed in this step
 
 # Consider that the env is multiagent
-# TODO che fa esattamente sto pezzo?
 # Number of transitions to do for validating Q
+# TODO Add later
+'''
 while T < args.evaluation_size:
-    if done:
-        state, info = env.reset()
-        done = False
+    
+    for a in range(env.get_num_agents()):
+        if done[a]:
+            state, info = env.reset()
+            done[a] = False
     
     for a in range(env.get_num_agents()):
         action = np.random.randint(0, action_space)
-        action_dict.update({a: action})
+        network_action_dict.update({a: action})
+        # TODO must add shortest path action selection here
         
-    next_state, rewards, done, info = env.step(action_dict)  # This must change TODO
+    next_state, rewards, done, info = env.step(railenv_action_dict)  # This must change TODO
     val_mem.append(state, None, None, done)
     state = next_state
     T += 1
-
+'''
 
 if args.evaluate: # TODO Don't use this arg for the moment
-    dqn.eval() # Set DQN (online network) to evolution mode
+    dqn.eval() # Set DQN (online network) to evaluation mode
     avg_reward, avg_Q = test(args, 0, dqn, val_mem, metrics, results_dir, evaluate=True)  # Test
     print('Avg. reward: ' + str(avg_reward) + ' | Avg. Q: ' + str(avg_Q))
 else:
     # Training loop
     dqn.train()
-
-    for ep in range(1, args.n_episodes + 1):
+    ################## Episodes loop #######################
+    for ep in range(1, args.num_episodes + 1):
         # Reset env at the beginning of one episode
-        state, info = env.reset(True, True)
-
+        state, info = env.reset()
+        
+        # Pick first action # TODO Decide entering of agents, now random
+        for a in range(env.get_num_agents()):
+            action = np.random.choice((0,2))
+            railenv_action_dict.update({a: action})
+            
+        ############## Steps loop ##########################
         for T in trange(1, args.T_max + 1):
             if T % args.replay_frequency == 0:
                 dqn.reset_noise()  # Draw a new set of noisy weights
-
+            
             for a in range(env.get_num_agents()):
-                action = dqn.act(state)  # Choose an action greedily (with noisy weights)
-                next_state, reward, done = env.step(action)  # Step
+                if info['action_required'][a]:
+                    network_action = dqn.act(state[a])  # Choose an action greedily (with noisy weights)
+                    railenv_action = observation_builder.choose_railenv_action(a, network_action)
+                    update_values[a] = True
+                else:
+                    network_action = 0
+                    railenv_action = 0
+                    update_values[a] = False
+                # Update action dicts
+                railenv_action_dict.update({a: railenv_action})
+                network_action_dict.update({a: network_action})
+                    
+            next_state, reward, done, info = env.step(railenv_action_dict)  # Env step
+            # Clip reward and update replay buffer
+            for a in range(env.get_num_agents()):
                 if args.reward_clip > 0:
-                    reward = max(min(reward, args.reward_clip), -args.reward_clip)  # Clip rewards
-                    # TODO il memory replay nell'altro inseriva una tupla per ogni agente o tutto insieme?
-            mem.append(state, action, reward, done)  # Append transition to memory
-
+                    reward[a] = max(min(reward[a], args.reward_clip), -args.reward_clip)
+                mem.append(state[a], network_action_dict[a], reward[a], done[a])  # Append transition to memory
+                # TODO Update single experience tuples or whole (all agents)?
+                
+            state = next_state.copy()
             # Train and test
             if T >= args.learn_start:
                 # Anneal importance sampling weight β to 1
@@ -231,6 +272,8 @@ else:
                   dqn.learn(mem)  # Train with n-step distributional double-Q learning
 
                 if T % args.evaluation_interval == 0:
+                    # TODO Don't produce evaluation metrics for the moment
+                    '''
                     dqn.eval()  # Set DQN (online network) to evaluation mode
                     avg_reward, avg_Q = test(args, T, dqn, val_mem, metrics, results_dir)  # Test
                     log(
@@ -239,6 +282,7 @@ else:
                     dqn.train()  # Set DQN (online network) back to training mode
     
                     # If memory path provided, save it
+                    '''
                     if args.memory is not None:
                         save_memory(mem, args.memory, args.disable_bzip_memory)
     
@@ -250,5 +294,6 @@ else:
                 if (args.checkpoint_interval != 0) and (T % args.checkpoint_interval == 0):
                     dqn.save(results_dir, 'checkpoint.pth')
     
-            state = next_state
 
+            if done['__all__']:
+                break

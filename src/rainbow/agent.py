@@ -9,10 +9,9 @@ from src.rainbow.model import DQN
 
 
 class RainbowAgent():
-    def __init__(self, args, env):
-        #self.action_space = env.action_space()
-        self.action_space = 2  # TODO Parameterize
-        self.state_size = args.state_size
+    def __init__(self, args, state_size, env):
+        self.action_space = args.network_action_space
+        self.state_size = state_size
         self.atoms = args.atoms
         self.Vmin = args.V_min
         self.Vmax = args.V_max
@@ -52,7 +51,7 @@ class RainbowAgent():
     # Acts based on single state (no batch)
     def act(self, state):
         with torch.no_grad():
-            return (self.online_net(state.unsqueeze(0)) * self.support).sum(2).argmax(1).item()
+            return (self.online_net(torch.from_numpy(state).unsqueeze(0).float()) * self.support).sum(2).argmax(1).item()
 
     # Acts with an ε-greedy policy (used for evaluation only)
     def act_e_greedy(self, state, epsilon=0.001):  # High ε can reduce evaluation scores drastically

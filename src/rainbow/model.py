@@ -7,7 +7,7 @@ from torch import nn
 from torch.nn import functional as F
 
 
-# Factorised NoisyLinear layer with bias TODO
+# Factorised NoisyLinear layer with bias
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, std_init=0.5):
         super(NoisyLinear, self).__init__()
@@ -51,30 +51,23 @@ class NoisyLinear(nn.Module):
 class DQN(nn.Module):
     def __init__(self, args, state_size, action_space, hidsize1=128, hidsize2=128):
         super(DQN, self).__init__()
-        self.atoms = args.atoms # ?
-
-        self.fc1_val = nn.Linear(state_size, hidsize1)
-        self.fc2_val = nn.Linear(hidsize1, hidsize2)
-        self.fc3_val = nn.Linear(hidsize2, 1)
-
-        self.fc1_adv = nn.Linear(state_size, hidsize1)
-        self.fc2_adv = nn.Linear(hidsize1, hidsize2)
-        self.fc3_adv = nn.Linear(hidsize2, action_space)
+        self.atoms = args.atoms
+        self.action_space = action_space
         # Not sure about initial layers, the original architecture uses conv layers
         # Need to choose the shared encoder
         self.fc_v = nn.Linear(state_size, hidsize1)
         self.fc_a = nn.Linear(state_size, hidsize2)
-        self.fc_h_v = NoisyLinear(hidsize1, args.hidden_size, std_init=args.noisy_std)
-        self.fc_h_a = NoisyLinear(hidsize1, args.hidden_size, std_init=args.noisy_std)
-        self.fc_z_v = NoisyLinear(args.hidden_size, self.atoms, std_init=args.noisy_std)
-        self.fc_z_a = NoisyLinear(args.hidden_size, action_space * self.atoms, std_init=args.noisy_std)
+        self.fc_noisy_h_v = NoisyLinear(hidsize1, args.hidden_size, std_init=args.noisy_std)
+        self.fc_noisy_h_a = NoisyLinear(hidsize1, args.hidden_size, std_init=args.noisy_std)
+        self.fc_noisy_z_v = NoisyLinear(args.hidden_size, self.atoms, std_init=args.noisy_std)
+        self.fc_noisy_z_a = NoisyLinear(args.hidden_size, action_space * self.atoms, std_init=args.noisy_std)
 
     def forward(self, x, log=False):
 
         # Value stream
-        v = self.fc_z_v(F.relu(self.fc_h_v(F.relu(self.fc_v))))
+        v = self.fc_noisy_z_v(F.relu(self.fc_noisy_h_v(F.relu(self.fc_v(x)))))
         # Advantage stream
-        a = self.fc_z_a(F.relu(self.fc_h_a(F.relu(self.fc_a))))
+        a = self.fc_noisy_z_a(F.relu(self.fc_noisy_h_a(F.relu(self.fc_a(x)))))
         v, a = v.view(-1, 1, self.atoms), a.view(-1, self.action_space, self.atoms)
         q = v + a - a.mean(1, keepdim=True)  # Combine streams
         if log:  # Use log softmax for numerical stability
@@ -85,5 +78,5 @@ class DQN(nn.Module):
 
     def reset_noise(self):
         for name, module in self.named_children():
-            if 'fc' in name:
+            if 'noisy' in name:
                 module.reset_noise()
