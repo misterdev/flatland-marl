@@ -219,7 +219,7 @@ while T < args.evaluation_size:
     T += 1
 '''
 
-if args.evaluate: # TODO Don't use this arg for the moment
+if args.evaluate:
     dqn.eval() # Set DQN (online network) to evaluation mode
     avg_reward, avg_Q = test(args, 0, dqn, val_mem, metrics, results_dir, evaluate=True)  # Test
     print('Avg. reward: ' + str(avg_reward) + ' | Avg. Q: ' + str(avg_Q))
@@ -290,7 +290,7 @@ else:
                 if T % args.target_update == 0:
                     dqn.update_target_net()
     
-                # Checkpoint the network
+                # Checkpoint the network every 'checkpoint_interval' timesteps
                 if (args.checkpoint_interval != 0) and (T % args.checkpoint_interval == 0):
                     dqn.save(results_dir, 'checkpoint.pth')
     
