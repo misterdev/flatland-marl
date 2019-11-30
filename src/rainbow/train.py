@@ -30,11 +30,9 @@ parser = argparse.ArgumentParser(description='Rainbow')
 parser.add_argument('--id', type=str, default='default', help='Experiment ID')
 parser.add_argument('--seed', type=int, default=123, help='Random seed')
 parser.add_argument('--disable-cuda', action='store_true', help='Disable CUDA')
-# parser.add_argument('--game', type=str, default='space_invaders', choices=atari_py.list_games(), help='ATARI game')
 parser.add_argument('--T-max', type=int, default=int(50e6), metavar='STEPS', help='Number of training steps (4x number of frames)')
 parser.add_argument('--max-episode-length', type=int, default=int(108e3), metavar='LENGTH', help='Max episode length in game frames (0 to disable)')
 parser.add_argument('--history-length', type=int, default=4, metavar='T', help='Number of consecutive states processed')
-# parser.add_argument('--architecture', type=str, default='canonical', choices=['canonical', 'data-efficient'], metavar='ARCH', help='Network architecture')
 parser.add_argument('--hidden-size', type=int, default=512, metavar='SIZE', help='Network hidden size')
 parser.add_argument('--noisy-std', type=float, default=0.1, metavar='σ', help='Initial standard deviation of noisy linear layers')
 parser.add_argument('--atoms', type=int, default=51, metavar='C', help='Discretised size of value distribution')
@@ -104,7 +102,11 @@ for k, v in vars(args).items():
 results_dir = os.path.join('results', args.id)
 if not os.path.exists(results_dir):
   os.makedirs(results_dir)
-metrics = {'steps': [], 'rewards': [], 'Qs': [], 'best_avg_reward': -float('inf')}
+metrics = {'steps': [],
+           'rewards': [], 
+           'Qs': [], 
+           'best_avg_done_agents': -float('inf'), 
+           'best_avg_reward': -float('inf')}
 np.random.seed(args.seed)
 torch.manual_seed(np.random.randint(1, 10000))
 # Set cpu or gpu
@@ -197,7 +199,6 @@ val_mem = ReplayMemory(args, args.evaluation_size)
 T, done = 0, True
 update_values = [False] * env.get_num_agents() # Used to update agent if action was performed in this step
 
-# Consider that the env is multiagent
 # Number of transitions to do for validating Q
 # TODO Add later
 '''
@@ -221,8 +222,9 @@ while T < args.evaluation_size:
 
 if args.evaluate:
     dqn.eval() # Set DQN (online network) to evaluation mode
-    avg_reward, avg_Q = test(args, 0, dqn, val_mem, metrics, results_dir, evaluate=True)  # Test
-    print('Avg. reward: ' + str(avg_reward) + ' | Avg. Q: ' + str(avg_Q))
+    avg_done_agents, avg_reward = test(args, 0, dqn, val_mem, metrics, results_dir, evaluate=True)  # Test
+    #print('Avg. reward: ' + str(avg_reward) + ' | Avg. Q: ' + str(avg_Q))
+    print('Avg. done agents: ' + str(avg_done_agents) + ' | Avg. cumulative reward: ' + str(avg_reward))
 else:
     # Training loop
     dqn.train()
@@ -235,7 +237,8 @@ else:
         for a in range(env.get_num_agents()):
             action = np.random.choice((0,2))
             railenv_action_dict.update({a: action})
-            
+        next_state, reward, done, info = env.step(railenv_action_dict)  # Env first step
+
         ############## Steps loop ##########################
         for T in trange(1, args.T_max + 1):
             if T % args.replay_frequency == 0:
@@ -259,8 +262,8 @@ else:
             for a in range(env.get_num_agents()):
                 if args.reward_clip > 0:
                     reward[a] = max(min(reward[a], args.reward_clip), -args.reward_clip)
-                mem.append(state[a], network_action_dict[a], reward[a], done[a])  # Append transition to memory
-                # TODO Update single experience tuples or whole (all agents)?
+                if update_values[a]:
+                    mem.append(state[a], network_action_dict[a], reward[a], done[a])  # Append transition to memory
                 
             state = next_state.copy()
             # Train and test
@@ -272,17 +275,16 @@ else:
                   dqn.learn(mem)  # Train with n-step distributional double-Q learning
 
                 if T % args.evaluation_interval == 0:
-                    # TODO Don't produce evaluation metrics for the moment
-                    '''
+                    
                     dqn.eval()  # Set DQN (online network) to evaluation mode
-                    avg_reward, avg_Q = test(args, T, dqn, val_mem, metrics, results_dir)  # Test
+                    avg_done_agents, avg_reward = test(args, T, dqn, val_mem, metrics, results_dir)  # Test
                     log(
-                      'T = ' + str(T) + ' / ' + str(args.T_max) + ' | Avg. reward: ' + str(avg_reward) + ' | Avg. Q: ' + str(
-                        avg_Q))
+                      'T = ' + str(T) + ' / ' + str(args.T_max) + ' | Avg. done agents: ' + str(avg_done_agents) +
+                      ' | Avg. reward: ' + str(avg_reward))
                     dqn.train()  # Set DQN (online network) back to training mode
     
                     # If memory path provided, save it
-                    '''
+                    
                     if args.memory is not None:
                         save_memory(mem, args.memory, args.disable_bzip_memory)
     
