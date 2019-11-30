@@ -107,7 +107,7 @@ class GraphObsForRailEnv(ObservationBuilder):
     def get(self, handle: int = 0) -> {}:
         """
         Returns obs for one agent, obs are a single array of concatenated values representing:
-        - occupancy of next prediction_depth cells,, 
+        - occupancy of next prediction_depth cells, 
         - agent priority/speed,
         - number of malfunctioning agents (encountered),
         - number of agents that are ready to depart (encountered).
@@ -164,7 +164,7 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         if agent.status == RailAgentStatus.READY_TO_DEPART:
             
-            if self.num_active_agents < len(self.env.agents) / 2:  # TODO
+            if self.num_active_agents < 10:  # TODO
                 # This could be reasonable since agents never start on switches - I guess
                 action = RailEnvActions.MOVE_FORWARD
             else:

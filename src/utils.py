@@ -75,7 +75,7 @@ def assign_priority(env, env_agent, conflict):
         priority = distance_on_rail(env_agent.position, env_agent.target) # Use Euclidean distance
         priority /= env_agent.speed_data['speed']
         # Normalize priority
-        priority = priority / (max_distance / min_speed)
+        priority = np.around(priority / (max_distance / min_speed), decimals=3)
         return priority
     
 

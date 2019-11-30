@@ -51,7 +51,7 @@ network_action_dict = dict()
 railenv_action_dict = dict()
 
 
-with path(src.nets, "exp_graph_obs_2100.pth") as file_in:
+with path(src.nets, "single_reward200.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
 
 
