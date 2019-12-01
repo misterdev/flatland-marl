@@ -63,54 +63,118 @@ dependencies:
   - zlib=1.2.11
   - zstd=1.4.4
   - pip:
+    - absl-py==0.8.1
+    - aicrowd-repo2docker==0.10.0
+    - astor==0.8.0
+    - atari-py==0.2.6
     - attrs==19.3.0
+    - cachetools==3.1.1
     - chardet==3.0.4
     - click==7.0
     - cloudpickle==1.2.2
+    - colorama==0.4.1
     - configobj==5.0.6
     - crowdai-api==0.1.22
+    - cryptography==2.8
     - cycler==0.10.0
+    - decorator==4.4.1
+    - docker==4.1.0
+    - escapism==1.0.0
     - filelock==3.0.12
     - flatland-rl==2.1.10
+    - funcsigs==1.0.2
     - future==0.18.2
+    - gast==0.2.2
+    - google-auth==1.7.1
+    - google-auth-oauthlib==0.4.1
+    - google-pasta==0.1.8
+    - grpcio==1.25.0
     - gym==0.14.0
+    - h5py==2.10.0
     - idna==2.8
     - importlib-metadata==0.23
     - importlib-resources==1.0.2
+    - ipython-genutils==0.2.0
+    - jeepney==0.4.1
+    - jinja2==2.10.3
+    - jsonschema==3.2.0
+    - keras-applications==1.0.8
+    - keras-preprocessing==1.1.0
+    - keyring==19.3.0
     - kiwisolver==1.1.0
+    - knockknock==0.1.5
     - lxml==4.4.1
+    - lz4==2.2.1
+    - markdown==3.1.1
+    - markupsafe==1.1.1
     - matplotlib==3.1.1
     - more-itertools==7.2.0
     - msgpack==0.6.2
     - msgpack-numpy==0.4.4.3
     - numpy==1.17.4
+    - oauthlib==3.1.0
+    - opencv-python==4.1.2.30
+    - opencv-python-headless==4.1.2.30
+    - opt-einsum==3.1.0
     - packaging==19.2
     - pandas==0.25.3
+    - plotly==4.3.0
     - pluggy==0.13.0
+    - protobuf==3.10.0
+    - psutil==5.6.5
     - py==1.8.0
+    - py-spy==0.3.0
     - pyarrow==0.15.1
+    - pyasn1==0.4.8
+    - pyasn1-modules==0.2.7
     - pyglet==1.3.2
+    - pyjwt==1.7.1
     - pyparsing==2.4.5
+    - pyrsistent==0.15.6
     - pytest==5.3.0
     - pytest-runner==5.2
     - python-dateutil==2.8.1
     - python-gitlab==1.13.0
+    - python-json-logger==0.1.11
+    - python-telegram-bot==12.2.0
     - pytz==2019.3
+    - pyyaml==5.1.2
+    - ray==0.7.6
     - recordtype==1.3
     - redis==3.3.11
     - requests==2.22.0
+    - requests-oauthlib==1.3.0
+    - retrying==1.3.3
+    - rsa==4.0
+    - ruamel-yaml==0.16.5
+    - ruamel-yaml-clib==0.2.0
     - scipy==1.3.2
+    - secretstorage==3.1.1
+    - semver==2.9.0
+    - setproctitle==1.1.10
     - six==1.13.0
     - svgutils==0.3.1
+    - tensorboard==2.0.1
+    - tensorflow==2.0.0
+    - tensorflow-estimator==2.0.1
+    - termcolor==1.1.0
     - timeout-decorator==0.4.1
     - toml==0.10.0
     - torch==1.3.1
+    - tornado==6.0.3
     - tox==3.14.1
+    - tqdm==4.39.0
+    - traitlets==4.3.3
+    - twilio==6.33.1
     - urllib3==1.25.7
     - ushlex==0.99.1
     - virtualenv==16.7.7
     - wcwidth==0.1.7
+    - websocket-client==0.56.0
+    - werkzeug==0.16.0
+    - wrapt==1.11.2
     - xarray==0.14.1
+    - yagmail==0.11.224
     - zipp==0.6.0
 prefix: /home/giulia/anaconda3/envs/flatland-rl
 
