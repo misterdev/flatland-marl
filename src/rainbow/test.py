@@ -5,6 +5,7 @@ import plotly
 from plotly.graph_objects import Scatter
 from plotly.graph_objs.scatter import Line
 import torch
+import random
 import numpy as np
 
 from flatland.envs.rail_env import RailEnv
@@ -37,7 +38,7 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
                 height=args.height,
                 rail_generator=sparse_rail_generator(
                             max_num_cities=args.max_num_cities,
-                            seed=args.seed,
+                            seed=random.randint(0, 1000), # This way envs change during evaluation
                             grid_mode=args.grid_mode,
                             max_rails_between_cities=args.max_rails_between_cities,
                             max_rails_in_city=args.max_rails_in_city,
@@ -67,8 +68,8 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
     metrics['steps'].append(T)
     T_rewards = [] # List of episodes rewards
     T_Qs = [] # List
-    T_num_done_agents = [] # List of episodes number of done agents
-    # TODO I could add also env_dones...
+    T_num_done_agents = [] # List of number of done agents for each episode
+    T_all_done = [] # If all agents completed in each episode
     network_action_dict = dict()
     railenv_action_dict = dict()
 
@@ -104,18 +105,17 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
                 railenv_action_dict.update({a: railenv_action})
                 network_action_dict.update({a: network_action})
                 
-            # Debug - show only if requested by args TODO
-            '''
-            for a in range(env.get_num_agents()):
-                print('#########################################')
-                print('Info for agent {}'.format(a))
-                print('Obs: {}'.format(state[a]))
-                print('Status: {}'.format(info['status'][a]))
-                print('Moving? {} at speed: {}'.format(env.agents[a].moving, info['speed'][a]))
-                print('Action required? {}'.format(info['action_required'][a]))
-                print('Network action: {}'.format(network_action_dict[a]))
-                print('Railenv action: {}'.format(railenv_action_dict[a]))
-            '''
+            if args.debug:
+                for a in range(env.get_num_agents()):
+                    print('#########################################')
+                    print('Info for agent {}'.format(a))
+                    print('Obs: {}'.format(state[a]))
+                    print('Status: {}'.format(info['status'][a]))
+                    print('Moving? {} at speed: {}'.format(env.agents[a].moving, info['speed'][a]))
+                    print('Action required? {}'.format(info['action_required'][a]))
+                    print('Network action: {}'.format(network_action_dict[a]))
+                    print('Railenv action: {}'.format(railenv_action_dict[a]))
+            
             state, reward, done, info = env.step(railenv_action_dict)  # Env step
             if args.render:
                 env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
@@ -132,6 +132,7 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
             if done[a]:
                 num_done_agents += 1 
         T_num_done_agents.append(num_done_agents / env.get_num_agents()) # In proportion to total
+        T_all_done.append(all_done)
 
     # Test Q-values over validation memory
     '''
