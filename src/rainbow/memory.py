@@ -7,7 +7,7 @@ import torch
 
 Transition = namedtuple('Transition', ('timestep', 'state', 'action', 'reward', 'nonterminal'))
 # blank_trans = Transition(0, torch.zeros(84, 84, dtype=torch.uint8), None, 0, False)
-blank_trans = Transition(0, torch.zeros(43, dtype=torch.uint8), None, 0, False)
+blank_trans = Transition(0, torch.zeros(84, dtype=torch.uint8), None, 0, False)  # Value depends on state_size
 
 # Prioritized Experience Replay (https://arxiv.org/abs/1511.05952) uses sum-tree 
 # Segment tree data structure where parent node values are sum/max of children node values

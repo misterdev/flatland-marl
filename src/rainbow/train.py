@@ -111,7 +111,7 @@ def main(args):
 				  )
 	env.reset()
 	
-	state_size = args.prediction_depth - 1 + 4 # TODO
+	state_size = args.prediction_depth * 2 + 4 # TODO
 	action_space = args.network_action_space
 	network_action_dict = {}
 	railenv_action_dict = {}
@@ -158,7 +158,7 @@ def main(args):
 	
 	if args.evaluate:
 		dqn.eval() # Set DQN (online network) to evaluation mode
-		avg_done_agents, avg_reward, avg_norm_reward = test(args, 0, dqn, val_mem, metrics, results_dir, evaluate=True)  # Test
+		avg_done_agents, avg_reward, avg_norm_reward = test(args, 0, 0, dqn, val_mem, metrics, results_dir, evaluate=True)  # Test
 		#print('Avg. reward: ' + str(avg_reward) + ' | Avg. Q: ' + str(avg_Q))
 		print('Avg. done agents: ' + str(avg_done_agents) + ' | Avg. cumulative reward: ' + str(avg_reward) + 
 			  ' | Avg. normalized reward: ' + str(avg_norm_reward))
@@ -226,7 +226,7 @@ def main(args):
 					if (ep % args.evaluation_interval) == 0 and (T == args.T_max):  # Eval only at the last step of an episode
 	
 						dqn.eval()  # Set DQN (online network) to evaluation mode
-						avg_done_agents, avg_reward, avg_norm_reward = test(args, T, dqn, val_mem, metrics, results_dir)  # Test
+						avg_done_agents, avg_reward, avg_norm_reward = test(args, T, ep, dqn, val_mem, metrics, results_dir)  # Test
 						log(
 							'T = ' + str(T) + ' / ' + str(args.T_max) + ' | Avg. done agents: ' + str(avg_done_agents) +
 							' | Avg. reward: ' + str(avg_reward) + ' | Avg. normalized reward: ' + str(avg_norm_reward))

@@ -18,7 +18,7 @@ from src.graph_observations import GraphObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
 
 # Test DQN
-def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
+def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
     
     # Init env and set in evaluation mode
     # Maps speeds to % of appearance in the env
@@ -38,7 +38,7 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
                 height=args.height,
                 rail_generator=sparse_rail_generator(
                             max_num_cities=args.max_num_cities,
-                            seed=random.randint(0, 1000), # This way envs change during evaluation
+                            seed=ep, # Use episode as seed when evaluation is performed during training
                             grid_mode=args.grid_mode,
                             max_rails_between_cities=args.max_rails_between_cities,
                             max_rails_in_city=args.max_rails_in_city,
@@ -58,13 +58,13 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
         env_renderer = RenderTool(
                 env,
                 gl="PILSVG",
-                agent_render_variant=AgentRenderVariant.ONE_STEP_BEHIND,
+                agent_render_variant=AgentRenderVariant.ONE_STEP_BEHIND_AND_BOX,
                 show_debug=True,
                 screen_height=1080,
                 screen_width=1920)
 
     #max_time_steps = env.compute_max_episode_steps(env.width, env.height)
-    max_time_steps = 100 # TODO Debug
+    max_time_steps = 150 # TODO Debug
     metrics['steps'].append(T)
     T_rewards = [] # List of episodes rewards
     T_Qs = [] # List
@@ -111,6 +111,7 @@ def test(args, T, dqn, val_mem, metrics, results_dir, evaluate=False):
                     print('Info for agent {}'.format(a))
                     print('Obs: {}'.format(state[a]))
                     print('Status: {}'.format(info['status'][a]))
+                    print('Position: {}'.format(env.agents[a].position))
                     print('Moving? {} at speed: {}'.format(env.agents[a].moving, info['speed'][a]))
                     print('Action required? {}'.format(info['action_required'][a]))
                     print('Network action: {}'.format(network_action_dict[a]))
