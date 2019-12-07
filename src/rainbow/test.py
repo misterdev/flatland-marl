@@ -58,7 +58,7 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
         env_renderer = RenderTool(
                 env,
                 gl="PILSVG",
-                agent_render_variant=AgentRenderVariant.ONE_STEP_BEHIND_AND_BOX,
+                agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS_AND_BOX,
                 show_debug=True,
                 screen_height=1080,
                 screen_width=1920)
@@ -117,6 +117,7 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
                     print('Network action: {}'.format(network_action_dict[a]))
                     print('Railenv action: {}'.format(railenv_action_dict[a]))
             
+            # Breakpoint for debugging here
             state, reward, done, info = env.step(railenv_action_dict)  # Env step
             if args.render:
                 env_renderer.render_env(show=True, show_observations=False, show_predictions=True)

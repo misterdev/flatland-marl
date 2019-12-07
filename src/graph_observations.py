@@ -84,18 +84,18 @@ class GraphObsForRailEnv(ObservationBuilder):
         self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
 
         if self.prediction_dict:
-            for t in range(1, self.predictor.max_depth + 1): #  +1? I want to use only predictions from the next ts, not the current
+            self.max_prediction_depth = self.predictor.max_depth
+            for t in range(self.max_prediction_depth):
                 pos_list = []
                 dir_list = []
                 for a in handles:
                     if self.prediction_dict[a] is None:
                         continue
-                    pos_list.append(self.prediction_dict[a][t-1][1:3])
-                    dir_list.append(self.prediction_dict[a][t-1][3])
-                self.predicted_pos_coord.update({t-1: pos_list})
-                self.predicted_pos.update({t-1: coordinate_to_position(self.env.width, pos_list)})
-                self.predicted_dir.update({t-1: dir_list})
-            self.max_prediction_depth = len(self.predicted_pos)
+                    pos_list.append(self.prediction_dict[a][t][1:3])
+                    dir_list.append(self.prediction_dict[a][t][3])
+                self.predicted_pos_coord.update({t: pos_list})
+                self.predicted_pos.update({t: coordinate_to_position(self.env.width, pos_list)})
+                self.predicted_dir.update({t: dir_list})
 
             for a in range(len(self.env.agents)):
                 pos_list = []
@@ -129,6 +129,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         # Occupancy
         occupancy, conflicting_agents = self._fill_occupancy(handle)
         is_conflict = True if len(conflicting_agents) > 0 else False
+        # TODO This can be done inside _fill_occupancy
         # Augment occupancy with another one-hot encoded layer: 1 if this cell is overlapping and the conflict span was already entered by some agent
         second_layer = np.zeros(self.max_prediction_depth) # Same size as occupancy
         for ca in conflicting_agents:
@@ -148,6 +149,13 @@ class GraphObsForRailEnv(ObservationBuilder):
         print('Occupancy, first layer: {}'.format(occupancy))
         print('Occupancy, second layer: {}'.format(second_layer))
         occupancy = np.append(occupancy, second_layer)
+        # Bifurcation points, one-hot encoded layer of predicted cells where 1 means that this cell is a fork (global)
+        forks = np.zeros(self.max_prediction_depth, dtype=int)
+        # Get full transitions of cells in the prediction
+        #for cell in self.cells_sequence[handle]:
+        # TODO
+        # Fill as 1 if transitions represent a fork cell
+        
         #  Speed/priority
         priority = assign_priority(self.env, agent, is_conflict)
         max_prio_encountered = 0
@@ -168,8 +176,6 @@ class GraphObsForRailEnv(ObservationBuilder):
             if a.status in [RailAgentStatus.READY_TO_DEPART]:
                 n_agents_ready_to_depart += 1  # Considering ALL agents
         # shape (prediction_depth + 4, )
-        # TODO Prova: tolgo il primo ts in occupancy - not really
-        #occupancy_up = occupancy[1:]
         agent_obs = np.append(occupancy, (priority, max_prio_encountered, n_agents_malfunctioning, n_agents_ready_to_depart))
         
         # With this obs the agent actually decided only if it has to move or stop
@@ -198,9 +204,17 @@ class GraphObsForRailEnv(ObservationBuilder):
                 action = RailEnvActions.DO_NOTHING
             
 
-        elif agent.status == RailAgentStatus.ACTIVE:
+        elif agent.status == RailAgentStatus.ACTIVE: # TODO Move k_shortest_paths from here - this is computationally expensive
             # This can return None when rails are disconnected or there was an error in the DistanceMap
             shortest_paths = self.predictor.get_shortest_paths()
+            '''
+            k_shortest_paths = self.predictor.get_k_shortest_paths(
+                source_position=agent.position, 
+                source_direction=agent.direction, 
+                target_position=agent.target, 
+                k=3,
+                debug=True)
+            '''
             if shortest_paths[handle] is None:  # Railway disrupted
                 action = RailEnvActions.STOP_MOVING
             else:
@@ -454,9 +468,9 @@ class GraphObsForRailEnv(ObservationBuilder):
         conflicting_agents = set()
         overlapping_paths = self._compute_overlapping_paths(handle)
 
-        for ts in range(0, self.max_prediction_depth):
+        for ts in range(self.max_prediction_depth):
             if self.env.agents[handle].status in [RailAgentStatus.READY_TO_DEPART, RailAgentStatus.ACTIVE]:
-                occupancy[ts], conflicting_agents_ts = self._possible_conflict(handle, ts)
+                occupancy[ts], conflicting_agents_ts = self._possible_conflict(handle, ts) # +1 because prediction works on self.max_prediction_length + 1
                 conflicting_agents.update(conflicting_agents_ts)
 
         # If a conflict is predicted, then it makes sense to populate occupancy with overlapping paths
