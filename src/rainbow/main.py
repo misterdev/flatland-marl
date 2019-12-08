@@ -127,34 +127,36 @@ def main(args):
 	
 		mem = load_memory(args.memory, args.disable_bzip_memory)
 	else:
-		mem = ReplayMemory(args, args.memory_capacity)  # Init empty replay buffer
+		# Init one replay buffer for each agent (TODO)
+		mems = [ReplayMemory(args, int(args.memory_capacity/args.num_agents)) for a in range(args.num_agents)]
+		# mem = ReplayMemory(args, args.memory_capacity)  # Init empty replay buffer
 	
 	priority_weight_increase = (1 - args.priority_weight) / (args.T_max - args.learn_start)
 	
+	# Construct validation memory
 	val_mem = ReplayMemory(args, args.evaluation_size)
-	T, done = 0, True
+	T = 0
+	all_done = True
 	update_values = [False] * env.get_num_agents() # Used to update agent if action was performed in this step
 	
 	# Number of transitions to do for validating Q
-	# TODO Add later
-	'''
 	while T < args.evaluation_size:
 		
 		for a in range(env.get_num_agents()):
-			if done[a]:
+			if all_done:
 				state, info = env.reset()
-				done[a] = False
+				all_done = False
 		
 		for a in range(env.get_num_agents()):
-			action = np.random.randint(0, action_space)
-			network_action_dict.update({a: action})
-			# TODO must add shortest path action selection here
+			action = np.random.choice(np.arange(5))
+			railenv_action_dict.update({a: action})
 			
-		next_state, rewards, done, info = env.step(railenv_action_dict)  # This must change TODO
-		val_mem.append(state, None, None, done)
+		next_state, rewards, done, info = env.step(railenv_action_dict)
+		val_mem.append(state[0], None, None, all_done) # TODO Using only state from agent 0 for now
+		all_done = done['__all__']
 		state = next_state
 		T += 1
-	'''
+	
 	
 	if args.evaluate:
 		dqn.eval() # Set DQN (online network) to evaluation mode
@@ -212,16 +214,22 @@ def main(args):
 					if args.reward_clip > 0:
 						reward[a] = max(min(reward[a], args.reward_clip), -args.reward_clip)
 					if update_values[a]:  # Store transition only if this agent performed action in this time step
-						mem.append(state[a], network_action_dict[a], reward[a], done[a])  # Append transition to memory
+						mems[a].append(state[a], network_action_dict[a], reward[a], done[a]) # Append to own buffer
+						#mem.append(state[a], network_action_dict[a], reward[a], done[a])  # Append transition to memory
+				
 	
 				state = next_state.copy()
 				# Train and test
 				if ep >= args.learn_start:
 					# Anneal importance sampling weight β to 1
-					mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1)
+					#mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1)
+					for a in range(args.num_agents):
+						mems[a].priority_weight = min(mems[a].priority_weight + priority_weight_increase, 1)
 	
-					if T % args.replay_frequency == 0:
-						dqn.learn(mem)  # Train with n-step distributional double-Q learning
+					if T % args.replay_frequency == 0: # TODO Should learn from info derived from all the replay buffers
+						a = np.random.choice(np.arange(args.num_agents))
+						dqn.learn(mems[a]) # Learn randomly from one of the available replay buffer
+						# dqn.learn(mem)  # Train with n-step distributional double-Q learning
 	
 					if (ep % args.evaluation_interval) == 0 and (T == args.T_max):  # Eval only at the last step of an episode
 	
@@ -235,7 +243,8 @@ def main(args):
 						# If memory path provided, save it
 	
 						if args.memory is not None:
-							save_memory(mem, args.memory, args.disable_bzip_memory)
+							save_memory(mems[0], args.memory, args.disable_bzip_memory) # Save only first replay buffer (?)
+							#save_memory(mem, args.memory, args.disable_bzip_memory)
 	
 					# Update target network
 					if T % args.target_update == 0:
