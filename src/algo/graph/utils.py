@@ -68,7 +68,8 @@ def map_to_graph(env):
 	visited = set()  # Keeps set of CardinalNodes that were already visited
 	for n in nodes:
 		for cp in range(4): # Check edges from the 4 cardinal points
-			if np.count_nonzero(connections[n][cp, :]) > 0:	
+			if np.count_nonzero(connections[n][cp, :]) > 0:
+				visited.add(CardinalNode(n, cp)) # Add to visited
 				node_found = False
 				edge_length = 0
 				# Keep going until another node is found
@@ -79,14 +80,17 @@ def map_to_graph(env):
 					if neighbour_pos in cell_to_id_node:
 						# node_found = True
 						# Build edge, mark visited
-						# id_edge, (id_node1, cp1), (id_node2, cp2), length 
-						info.update({id_edge_counter: 
-										 (CardinalNode(n, cp), 
-										  CardinalNode(cell_to_id_node[neighbour_pos], reverse_dir(direction)), 
-										  edge_length)})
-						id_edge_counter += 1
-						visited.add(CardinalNode(n, cp))
-						visited.add(CardinalNode(cell_to_id_node[neighbour_pos], reverse_dir(direction)))
+						id_node1 = n
+						cp1 = cp
+						id_node2 = cell_to_id_node[neighbour_pos]
+						cp2 = reverse_dir(direction)
+						if CardinalNode(id_node2, cp2) not in visited: 
+							info.update({id_edge_counter: 
+											 (CardinalNode(id_node1, cp1), 
+											  CardinalNode(id_node2, cp2), 
+											  edge_length)})
+							id_edge_counter += 1
+							visited.add(CardinalNode(id_node2, cp2))
 						break
 					edge_length += 1 # Not considering switches in the count
 					# Update pos and dir
