@@ -5,3 +5,5 @@ fc_treeobs/nets/
 bot_config.txt
 
 *.png
+
+*.pyc

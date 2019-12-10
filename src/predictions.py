@@ -124,7 +124,6 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
                 # Prediction is ready
                 prediction[index] = [index, *new_position, new_direction, 0]
-                # prediction[index] = [index, *new_position, new_direction, action]
                 visited.add((*new_position, new_direction))
 
             # TODO: very bady side effects for visualization only: hand the dev_pred_dict back instead of setting on env!
