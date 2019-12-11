@@ -4,34 +4,30 @@ from flatland.core.grid.grid4_utils import get_new_position, get_direction, dire
 from flatland.core.grid.rail_env_grid import RailEnvTransitions
 
 CardinalNode = \
-	NamedTuple('CardinalNode',[('id_node', int), ('cardinal_point', int)])
+	NamedTuple('CardinalNode', [('id_node', int), ('cardinal_point', int)])
+Train = \
+	NamedTuple('Train', [
+		('handle', int), 
+		(('id_edge', int), ('crossing_dir', bool), ('dist', int)), 
+		(('id_node', int), ('cp', int)), 
+		('speed', int)
+	])
 
 def map_to_graph(env):
 	
-	# Retrieve nodes
 	id_node_counter = 0
 	cell_to_id_node = {} # Map cell position : id_node
 	id_node_to_cell = {} # Map id_node to cell position
-	# Get bitmap and identify cells hat are nodes (have switches)
-	bitmap = np.zeros((env.height, env.width, 16))
 	connections = {} # Map id_node : connections(node)
-	for i in range(bitmap.shape[0]):
-		for j in range(bitmap.shape[1]):
-			'''
-			* This is another way to do it *
-			
-			bitlist = [int(digit) for digit in bin(env.rail.get_full_transitions(i, j))[2:]]
-			bitlist = [0] * (16 - len(bitlist)) + bitlist
-			bitmap[i, j] = np.array(bitlist)
-			
-			orientation = 0 # North
-			for k in range(bitmap.shape[2] - 4): # 16 - 4
-				if k > 3 and k % 4 == 0: # Change to following group of bits
-					orientation += 1
-				if bitmap[i, j, k] == 1 # esiste una connessione SN
-			'''
+	targets = [agent.target for agent in env.agents]
+	
+	# Identify cells hat are nodes (have switches)
+	for i in range(env.height):
+		for j in range(env.width):
+
 			is_switch = False	
 			is_crossing = False
+			is_target = False
 			connections_matrix = np.zeros((4, 4)) # Matrix NESW x NESW
 			
 			# Check if diamond crossing
@@ -40,7 +36,11 @@ def map_to_graph(env):
 				is_crossing = True
 				connections_matrix[0, 2] = connections_matrix[2, 0] = 1
 				connections_matrix[1, 3] = connections_matrix[3, 1] = 1
+
 			else:
+				# Check if target
+				if (i, j) in targets:
+					is_target = True
 				# Check if switch
 				for direction in (0, 1, 2, 3):	# 0:N, 1:E, 2:S, 3:W
 					possible_transitions = env.rail.get_transitions(i, j, direction)
@@ -52,7 +52,7 @@ def map_to_graph(env):
 					if num_transitions > 1:
 						is_switch = True	
 						
-			if is_switch or is_crossing:
+			if is_switch or is_crossing or is_target:
 				# Add node - keep info on cell position
 				# Update only for nodes that are switches
 				connections.update({id_node_counter: connections_matrix})
@@ -105,8 +105,9 @@ def map_to_graph(env):
 						# Entrance dir is always opposite to exit dir
 						direction = t
 							
-	# Build graph object made of vertices and edges TODO
-	print('End')
+	# Build graph object made of vertices and edges
+	edges = info.keys()
+	return (nodes, edges) # Graph as a tuple (list of vertices, list of edges)
 
 def reverse_dir(direction):
 	"""
@@ -115,3 +116,25 @@ def reverse_dir(direction):
 	:return: 
 	"""
 	return int((direction + 2) % 4)
+
+#ogni treno ha un suo id, una posizione definita da
+# - un binario (un arco)
+# - una direzione di attraversamento (0,1)
+# - la distanza percorsa sul binario (int)
+# una velocita
+# una destinazione (id del nodo)
+# altre info
+
+def train_on_graph():
+	"""
+	:param: handle: agent id
+	:return: structure that represents a train on this graph
+	"""
+	
+	# Find rail
+	
+	# Determine crossing direction
+	# Determine distance already walked
+	# Speed
+	# Determine target id # TODO Targets are nodes!
+	pass
