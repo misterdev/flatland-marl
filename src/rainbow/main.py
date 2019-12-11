@@ -91,8 +91,7 @@ def main(args):
 	
 	schedule_generator = sparse_schedule_generator(speed_ration_map)
 	
-	stochastic_data = {'prop_malfunction': 0.3,  # Percentage of defective agents
-					   'malfunction_rate': 30,  # Rate of malfunction occurrence
+	stochastic_data = {'malfunction_rate': 30,  # Rate of malfunction occurrence
 					   'min_duration': 3,  # Minimal duration of malfunction
 					   'max_duration': 20  # Max duration of malfunction
 					   }
@@ -127,7 +126,7 @@ def main(args):
 	
 		mem = load_memory(args.memory, args.disable_bzip_memory)
 	else:
-		# Init one replay buffer for each agent (TODO)
+		# Init one replay buffer for each agent (TODO) Must be updated when the number of agents change
 		mems = [ReplayMemory(args, int(args.memory_capacity/args.num_agents)) for a in range(args.num_agents)]
 		# mem = ReplayMemory(args, args.memory_capacity)  # Init empty replay buffer
 	
@@ -140,6 +139,7 @@ def main(args):
 	update_values = [False] * env.get_num_agents() # Used to update agent if action was performed in this step
 	
 	# Number of transitions to do for validating Q
+	
 	while T < args.evaluation_size:
 		
 		for a in range(env.get_num_agents()):
@@ -157,7 +157,6 @@ def main(args):
 		state = next_state
 		T += 1
 	
-	
 	if args.evaluate:
 		dqn.eval() # Set DQN (online network) to evaluation mode
 		avg_done_agents, avg_reward, avg_norm_reward = test(args, 0, 0, dqn, val_mem, metrics, results_dir, evaluate=True)  # Test
@@ -168,7 +167,7 @@ def main(args):
 		# Training loop
 		dqn.train()
 		################## Episodes loop #######################
-		for ep in range(1, args.num_episodes + 1):
+		for ep in trange(1, args.num_episodes + 1):
 			# Reset env at the beginning of one episode
 			state, info = env.reset()
 	
@@ -179,7 +178,7 @@ def main(args):
 			next_state, reward, done, info = env.step(railenv_action_dict)  # Env first step
 	
 			############## Steps loop ##########################
-			for T in trange(1, args.T_max + 1):
+			for T in range(1, args.T_max + 1):
 				if T % args.replay_frequency == 0:
 					dqn.reset_noise()  # Draw a new set of noisy weights
 	
@@ -220,7 +219,7 @@ def main(args):
 	
 				state = next_state.copy()
 				# Train and test
-				if ep >= args.learn_start:
+				if ep >= args.learn_start: # Give time to accumulate experiences
 					# Anneal importance sampling weight β to 1
 					#mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1)
 					for a in range(args.num_agents):
@@ -316,7 +315,7 @@ if __name__ == '__main__':
 	parser.add_argument('--prediction-depth', type=int, default=40, help='Prediction depth for shortest path strategy, i.e. length of a path')
 	parser.add_argument('--view-semiwidth', type=int, default=7, help='Semiwidth of field view for agent in local obs')
 	parser.add_argument('--view-height', type=int, default=30, help='Height of the field view for agent in local obs')
-	parser.add_argument('--offset', type=int, default=25, help='Offset of agent in local obs')
+	parser.add_argument('--offset', type=int, default=10, help='Offset of agent in local obs')
 	# Training parameters
 	parser.add_argument('--num-episodes', type=int, default=1000, help='Number of episodes on which to train the agents')
 

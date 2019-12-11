@@ -128,12 +128,12 @@ class GraphObsForRailEnv(ObservationBuilder):
 
         # Occupancy
         occupancy, conflicting_agents = self._fill_occupancy(handle)
-        is_conflict = True if len(conflicting_agents) > 0 else False
         # TODO This can be done inside _fill_occupancy
         # Augment occupancy with another one-hot encoded layer: 1 if this cell is overlapping and the conflict span was already entered by some agent
-        second_layer = np.zeros(self.max_prediction_depth) # Same size as occupancy
+        second_layer = np.zeros(self.max_prediction_depth, dtype=int) # Same size as occupancy
         for ca in conflicting_agents:
             if ca != handle:
+                # Find ts when conflict occurred
                 ts = [x for x, y in enumerate(self.cells_sequence[handle]) if y[0] == agents[ca].position[0] and y[1] == agents[ca].position[1]] # Find index/ts for conflict
                 # Set to 1 conflict span which was already entered by some agent - fill left side and right side of ts
                 if len(ts) > 0:
@@ -145,9 +145,11 @@ class GraphObsForRailEnv(ObservationBuilder):
                     while i < self.max_prediction_depth:
                         second_layer[i] = 1 if occupancy[i] > 0 else 0
                         i += 1
+        '''
         print('Agent {}'.format(handle))
         print('Occupancy, first layer: {}'.format(occupancy))
         print('Occupancy, second layer: {}'.format(second_layer))
+        '''
         occupancy = np.append(occupancy, second_layer)
         # Bifurcation points, one-hot encoded layer of predicted cells where 1 means that this cell is a fork (global)
         forks = np.zeros(self.max_prediction_depth, dtype=int)
@@ -157,6 +159,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         # Fill as 1 if transitions represent a fork cell
         
         #  Speed/priority
+        is_conflict = True if len(conflicting_agents) > 0 else False
         priority = assign_priority(self.env, agent, is_conflict)
         max_prio_encountered = 0
         if is_conflict:
@@ -464,7 +467,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         :param handle: agent id
         :return: occupancy, conflicting_agents
         """
-        occupancy = np.zeros(self.max_prediction_depth)
+        occupancy = np.zeros(self.max_prediction_depth, dtype=int)
         conflicting_agents = set()
         overlapping_paths = self._compute_overlapping_paths(handle)
 
@@ -480,7 +483,14 @@ class GraphObsForRailEnv(ObservationBuilder):
             for ca in conflicting_agents:
                 for ts in range(self.max_prediction_depth):
                     occupancy[ts] = overlapping_paths[ca, ts]  if occupancy[ts] == 0 else 1# e.g. 2 means that other 2 agents are conflicting and overlap there
-            
+        
+        # Check if agent has already occupied an overlapping span
+        agent_pos = self.env.agents[handle].position
+        
+        '''
+        while occupancy[index]:
+            occupancy[index] = 0 # Reset to 0 that span for this agent - since it has already occupied it now it's free for it
+        '''     
         # Occupancy is 0 for agents that are done - they don't perform actions anymore
         return occupancy, conflicting_agents
     
@@ -501,7 +511,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         :return: overlapping_paths is a np.array that computes path overlapping for pairs of agents, where 1 means overlapping.
         Each layer represents overlapping with one particular agent.
         """
-        overlapping_paths = np.zeros((self.env.get_num_agents(), self.max_prediction_depth))
+        overlapping_paths = np.zeros((self.env.get_num_agents(), self.max_prediction_depth), dtype=int)
         cells_sequence = self.predicted_pos_list[handle]
         for a in range(len(self.env.agents)):
             if a != handle:

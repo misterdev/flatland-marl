@@ -7,6 +7,7 @@ from plotly.graph_objs.scatter import Line
 import torch
 import random
 import numpy as np
+from tqdm import trange
 
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
@@ -16,6 +17,8 @@ from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 
 from src.graph_observations import GraphObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
+
+from src.algo.graph.utils import map_to_graph
 
 # Test DQN
 def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
@@ -93,6 +96,9 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
             env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
             
         for step in range(max_time_steps - 1):
+            # TODO
+            #if step == 10:
+            #    map_to_graph(env)
             # Choose actions
             for a in range(env.get_num_agents()):
                 if info['action_required'][a]:
@@ -137,10 +143,12 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
         T_all_done.append(all_done)
 
     # Test Q-values over validation memory
-    '''
+    
     for state in val_mem:    # Iterate over valid states
         T_Qs.append(dqn.evaluate_q(state))
-    '''
+    #if args.debug:
+    print('T_Qs: {}'.format(T_Qs))
+    
     avg_done_agents = sum(T_num_done_agents) / len(T_num_done_agents) # Average number of agents that reached their target
     avg_reward = sum(T_rewards) / len(T_rewards)
     avg_norm_reward = avg_reward / (max_time_steps / env.get_num_agents())
