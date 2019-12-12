@@ -110,10 +110,11 @@ def main(args):
 				  )
 	env.reset()
 	
-	state_size = args.prediction_depth * 2 + 4 # TODO
+	state_size = args.prediction_depth * 3 + 4 # TODO
 	action_space = args.network_action_space
 	network_action_dict = {}
 	railenv_action_dict = {}
+	qvalues = {} # Map handle: q value for this step
 	# Init agent
 	dqn = RainbowAgent(args, state_size, env)
 	
@@ -187,10 +188,12 @@ def main(args):
 						network_action = dqn.act(state[a])  # Choose an action greedily (with noisy weights)
 						railenv_action = observation_builder.choose_railenv_action(a, network_action)
 						update_values[a] = True
+						qvalues.update({a: dqn.get_q_values(state[a])})
 					else:
 						network_action = 0
 						railenv_action = 0
 						update_values[a] = False
+						qvalues.update({a: [0, 0]}) # '0' if wasn't updated
 					# Update action dicts
 					railenv_action_dict.update({a: railenv_action})
 					network_action_dict.update({a: network_action})
@@ -207,15 +210,22 @@ def main(args):
 						print('Action required? {}'.format(info['action_required'][a]))
 						print('Network action: {}'.format(network_action_dict[a]))
 						print('Railenv action: {}'.format(railenv_action_dict[a]))
+						#print('Q value: {}'.format(qvalues[a]))
+				if T == 100:
+					print('QValues: {}'.format(qvalues))
+				#print('Rewards: {}'.format(reward))
 					
 				# Clip reward and update replay buffer
 				for a in range(env.get_num_agents()):
+					'''
+					* Reward is always in [-1, 1], so we shouldn't need clipping
 					if args.reward_clip > 0:
 						reward[a] = max(min(reward[a], args.reward_clip), -args.reward_clip)
+					'''
 					if update_values[a]:  # Store transition only if this agent performed action in this time step
 						mems[a].append(state[a], network_action_dict[a], reward[a], done[a]) # Append to own buffer
 						#mem.append(state[a], network_action_dict[a], reward[a], done[a])  # Append transition to memory
-				
+				# print('Clipped rewards: {}'.format(reward))
 	
 				state = next_state.copy()
 				# Train and test
@@ -312,7 +322,7 @@ if __name__ == '__main__':
 	parser.add_argument('--observation-builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
 	parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
 	parser.add_argument('--bfs-depth', type=int, default=4, help='BFS depth of the graph observation')
-	parser.add_argument('--prediction-depth', type=int, default=40, help='Prediction depth for shortest path strategy, i.e. length of a path')
+	parser.add_argument('--prediction-depth', type=int, default=108, help='Prediction depth for shortest path strategy, i.e. length of a path')
 	parser.add_argument('--view-semiwidth', type=int, default=7, help='Semiwidth of field view for agent in local obs')
 	parser.add_argument('--view-height', type=int, default=30, help='Height of the field view for agent in local obs')
 	parser.add_argument('--offset', type=int, default=10, help='Offset of agent in local obs')

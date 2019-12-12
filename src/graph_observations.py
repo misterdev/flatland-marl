@@ -158,6 +158,12 @@ class GraphObsForRailEnv(ObservationBuilder):
         # TODO
         # Fill as 1 if transitions represent a fork cell
         
+        # Target
+        target = np.zeros(self.max_prediction_depth, dtype=int)
+        for index in range(len(self.cells_sequence[handle])):
+            if self.cells_sequence[handle][index] == agent.target:
+                target[index] = 1
+        
         #  Speed/priority
         is_conflict = True if len(conflicting_agents) > 0 else False
         priority = assign_priority(self.env, agent, is_conflict)
@@ -179,7 +185,8 @@ class GraphObsForRailEnv(ObservationBuilder):
             if a.status in [RailAgentStatus.READY_TO_DEPART]:
                 n_agents_ready_to_depart += 1  # Considering ALL agents
         # shape (prediction_depth + 4, )
-        agent_obs = np.append(occupancy, (priority, max_prio_encountered, n_agents_malfunctioning, n_agents_ready_to_depart))
+        agent_obs = np.append(occupancy, target)
+        agent_obs = np.append(agent_obs, (priority, max_prio_encountered, n_agents_malfunctioning, n_agents_ready_to_depart))
         
         # With this obs the agent actually decided only if it has to move or stop
         return agent_obs
