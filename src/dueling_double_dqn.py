@@ -141,7 +141,20 @@ class Agent:
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
 
-
+    def get_q_values(self, state):
+        """
+        Used for debugging.
+        :param state: 
+        :return: 
+        """
+        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+        self.qnetwork_local.eval()
+        with torch.no_grad():
+            q_values = self.qnetwork_local(state)
+        self.qnetwork_local.train()
+        return q_values
+        
+    
 class ReplayBuffer:
     """Fixed-size buffer to store experience tuples."""
 

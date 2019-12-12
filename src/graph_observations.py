@@ -138,7 +138,7 @@ class GraphObsForRailEnv(ObservationBuilder):
                 # Set to 1 conflict span which was already entered by some agent - fill left side and right side of ts
                 if len(ts) > 0:
                     i = ts[0] # Since the previous returns a list of ts
-                    while i >= 0 and i < self.max_prediction_depth:
+                    while 0 <= i < self.max_prediction_depth:
                         second_layer[i] = 1 if occupancy[i] > 0 else 0
                         i -= 1
                     i = ts[0]

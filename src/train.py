@@ -60,7 +60,7 @@ def main(args):
         prediction_depth = args.prediction_depth
         bfs_depth = args.bfs_depth
         observation_builder = GraphObsForRailEnv(bfs_depth=bfs_depth, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
-        state_size = args.prediction_depth - 1 + 4 # TODO
+        state_size = args.prediction_depth * 2 + 4 # TODO
         network_action_size = 2  # {follow path, stop}
         railenv_action_size = 5  # The RailEnv possible actions
         agent = Agent(network_type='fc', state_size=state_size, action_size=network_action_size)
@@ -85,10 +85,10 @@ def main(args):
     env.reset()
 
     # max_steps = env.compute_max_episode_steps(args.width, args.height, args.num_agents/args.max_num_cities)
-    max_steps = 300 # TODO DEBUG
+    max_steps = 200 # TODO DEBUG
     eps = 1.
     eps_end = 0.005
-    eps_decay = 0.998
+    eps_decay = 0.9998
     # Need to have two since env works with RailEnv actions but agent works with network actions
     network_action_dict = dict()
     railenv_action_dict = dict()
@@ -101,8 +101,9 @@ def main(args):
     agent_obs_buffer = [None] * env.get_num_agents()
     agent_action_buffer = [2] * env.get_num_agents()
     update_values = [False] * env.get_num_agents()  # Used to update agent if action was performed in this step
-
-    for ep in range(1, args.n_episodes + 1):
+    qvalues = {}
+    
+    for ep in range(1, args.num_episodes + 1):
         
         obs, info = env.reset()
 
@@ -111,7 +112,7 @@ def main(args):
                 agent_obs[a] = obs[a].copy()
                 agent_obs_buffer[a] = agent_obs[a].copy()
             for a in range(env.get_num_agents()):
-                action = np.random.choice(np.arange(3))
+                action = np.random.choice((0, 2))
                 railenv_action_dict.update({a: action})  # All'inizio faccio partire a random TODO Prova
             next_obs, all_rewards, done, info = env.step(railenv_action_dict)
         # Normalize obs, only for LocalObs now
@@ -147,10 +148,12 @@ def main(args):
                         # Pick railenv action according to network decision if it's safe to go or to stop
                         railenv_action = observation_builder.choose_railenv_action(a, network_action)
                         update_values[a] = True
+                        qvalues.update({a: agent.get_q_values(agent_obs[a])})
                     else:
                         network_action = 0
                         railenv_action = 0
                         update_values[a] = False
+                        qvalues.update({a: [0, 0]})
                     # Update action dicts
                     action_prob[railenv_action] += 1
                     railenv_action_dict.update({a: railenv_action})
@@ -168,7 +171,8 @@ def main(args):
 
             # Environment step
             next_obs, all_rewards, done, info = env.step(railenv_action_dict)
-            
+            if step == 100:
+                print('QValues: {}'.format(qvalues))
             # Update replay buffer and train agent
             for a in range(env.get_num_agents()):
                 if update_values[a] or done[a]:
@@ -242,25 +246,25 @@ if __name__ == '__main__':
     # Flatland parameters
     parser.add_argument('--width', type=int, default=100, help='Environment width')
     parser.add_argument('--height', type=int, default=100, help='Environment height')
-    parser.add_argument('--num_agents', type=int, default=50, help='Number of agents in the environment')
-    parser.add_argument('--max_num_cities', type=int, default=6, help='Maximum number of cities where agents can start or end')
+    parser.add_argument('--num-agents', type=int, default=50, help='Number of agents in the environment')
+    parser.add_argument('--max-num-cities', type=int, default=6, help='Maximum number of cities where agents can start or end')
     parser.add_argument('--seed', type=int, default=1, help='Seed used to generate grid environment randomly')
-    parser.add_argument('--grid_mode', type=bool, default=False, help='Type of city distribution, if False cities are randomly placed')
-    parser.add_argument('--max_rails_between_cities', type=int, default=4, help='Max number of tracks allowed between cities, these count as entry points to a city')
-    parser.add_argument('--max_rails_in_city', type=int, default=6, help='Max number of parallel tracks within a city allowed')
-    parser.add_argument('--malfunction_rate', type=int, default=1000, help='Rate of malfunction occurrence of single agent')
-    parser.add_argument('--min_duration', type=int, default=20, help='Min duration of malfunction')
-    parser.add_argument('--max_duration', type=int, default=50, help='Max duration of malfunction')
-    parser.add_argument('--observation_builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
+    parser.add_argument('--grid-mode', type=bool, default=False, help='Type of city distribution, if False cities are randomly placed')
+    parser.add_argument('--max-rails-between-cities', type=int, default=4, help='Max number of tracks allowed between cities, these count as entry points to a city')
+    parser.add_argument('--max-rails-in-city', type=int, default=6, help='Max number of parallel tracks within a city allowed')
+    parser.add_argument('--malfunction-rate', type=int, default=1000, help='Rate of malfunction occurrence of single agent')
+    parser.add_argument('--min-duration', type=int, default=20, help='Min duration of malfunction')
+    parser.add_argument('--max-duration', type=int, default=50, help='Max duration of malfunction')
+    parser.add_argument('--observation-builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
     parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
-    parser.add_argument('--bfs_depth', type=int, default=4, help='BFS depth of the graph observation')
-    parser.add_argument('--prediction_depth', type=int, default=40, help='Prediction depth for shortest path strategy, i.e. length of a path')
-    parser.add_argument('--view_semiwidth', type=int, default=7, help='Semiwidth of field view for agent in local obs')
-    parser.add_argument('--view_height', type=int, default=30, help='Height of the field view for agent in local obs')
+    parser.add_argument('--bfs-depth', type=int, default=4, help='BFS depth of the graph observation')
+    parser.add_argument('--prediction-depth', type=int, default=40, help='Prediction depth for shortest path strategy, i.e. length of a path')
+    parser.add_argument('--view-semiwidth', type=int, default=7, help='Semiwidth of field view for agent in local obs')
+    parser.add_argument('--view-height', type=int, default=30, help='Height of the field view for agent in local obs')
     parser.add_argument('--offset', type=int, default=25, help='Offset of agent in local obs')
     # Training parameters
-    parser.add_argument('--n_episodes', type=int, default=1000, help='Number of episodes on which to train the agents')
-    parser.add_argument('--model_name', type=str, default='avoid_checkpoint', help='Name to use to save the model .pth')
+    parser.add_argument('--num-episodes', type=int, default=1000, help='Number of episodes on which to train the agents')
+    parser.add_argument('--model-name', type=str, default='avoid_checkpoint', help='Name to use to save the model .pth')
     # DDQN hyperparameters
     
     args = parser.parse_args()
