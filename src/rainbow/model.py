@@ -74,6 +74,7 @@ class DQN(nn.Module):
             q = F.log_softmax(q, dim=2)  # Log probabilities with action over second dimension
         else:
             q = F.softmax(q, dim=2)  # Probabilities with action over second dimension
+            
         return q # size(1, 2, 51) 51 as the atoms
 
     def reset_noise(self):

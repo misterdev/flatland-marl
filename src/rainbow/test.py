@@ -75,6 +75,7 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
     T_all_done = [] # If all agents completed in each episode
     network_action_dict = dict()
     railenv_action_dict = dict()
+    qvalues = {}
 
     # Test performance over several episodes
     for ep in range(args.evaluation_episodes):
@@ -102,11 +103,13 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
             # Choose actions
             for a in range(env.get_num_agents()):
                 if info['action_required'][a]:
-                    network_action = dqn.act_e_greedy(state[a])    # Choose an action ε-greedily
+                    network_action = dqn.act(state[a])  # Choose an action greedily (with noisy weights)
                     railenv_action = observation_builder.choose_railenv_action(a, network_action)
+                    qvalues.update({a: dqn.get_q_values(state[a])})
                 else:
                     network_action = 0
-                    railenv_action = 0 # DO_NOTHING
+                    railenv_action = 0
+                    qvalues.update({a: [0, 0]})  # '0' if wasn't updated
 
                 railenv_action_dict.update({a: railenv_action})
                 network_action_dict.update({a: network_action})
@@ -122,6 +125,9 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
                     print('Action required? {}'.format(info['action_required'][a]))
                     print('Network action: {}'.format(network_action_dict[a]))
                     print('Railenv action: {}'.format(railenv_action_dict[a]))
+                    print('Q value: {}'.format(qvalues[a]))
+                    # print('QValues: {}'.format(qvalues))
+                    print('Rewards: {}'.format(reward[a]))
             
             # Breakpoint for debugging here
             state, reward, done, info = env.step(railenv_action_dict)  # Env step
