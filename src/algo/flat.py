@@ -62,7 +62,7 @@ def insert_wrt_time(a,frontier,visited):
         new_frontier = new_frontier + tail
         return(new_frontier)    
 
-def find_shortest_paths(G,train,available_at):
+def find_shortest_paths(G, train, available_at, info, connections):
     print(available_at)
     #available_at is a map associating to each rail the timestep
     #at which it will be available. We keep the invariant that if a
@@ -74,7 +74,7 @@ def find_shortest_paths(G,train,available_at):
     idtrain,pos,target,speed = train
     print("train id: {}".format(idtrain))
     rail,direction,dist = pos
-    (s,cs),(t,ct), l = info(rail)
+    (s,cs),(t,ct), l = info[rail]
     
     current_length = l-dist
     current_time = int(current_length/speed)+available_at[rail]
@@ -98,9 +98,9 @@ def find_shortest_paths(G,train,available_at):
         visited.append((current_node,current_c))
         #cerco i binari adiacenti al current_node
         for e in E:
-            (s,cs),(t,ct),l = info(e)
-            if ((s == current_node and connection(current_node)[current_c,cs]==1) or
-                (t == current_node and connection(current_node)[current_c,ct]==1)):
+            (s,cs),(t,ct),l = info[e]
+            if ((s == current_node and connections[current_node][current_c,cs]==1) or
+                (t == current_node and connections[current_node][current_c,ct]==1)):
                 newlenght = current_length + l
                 newpath = list(current_path)
                 #if we want to use this rail, we need to wait until it is available
@@ -120,7 +120,7 @@ def find_shortest_paths(G,train,available_at):
                     newpath.append((e,0,transit_time))  #direction = 0 !!
                     #frontier = insert(((s,cs),newlenght,transit_time,newpath),frontier,visited)
                     frontier = insert_wrt_time(((s,cs),newlenght,transit_time,newpath),frontier,visited)
-        if frontier == []:
+        if not frontier:
             print("no path found")
             current_path = [] #empty path means failure
             break
@@ -134,7 +134,7 @@ print("fine")
 
 
 #esempio
-
+'''
 EO = np.zeros((4,4))
 EO[1,3]=EO[3,1]=1
 
@@ -171,15 +171,10 @@ def info(e):
         return ((2,1),(3,3),1)
     elif e == 4:
         return ((0,0),(3,0),8) # c'è un errore qua, il nodo 0 non ha connessione a nord TODO
+'''
+# no_trails = len(E)
+# available_at = np.zeros(no_trails,dtype=int)
 
-no_trails = len(E)
-available_at = np.zeros(no_trails,dtype=int)
-
-train = (0, #id del treno
-         (0,1,0), #pos: id del binario, direzione, distanza percorsa
-         (2,2), #target: nodo e punto cardinale
-         1 #speed
-         )
 
 #lenght,path = find_shortest_paths((V,E),train,available_at)
 
@@ -191,22 +186,30 @@ def update_availability(available_at, path):
 #available_at = update_availability(available_at,path)
 #print(available_at)
 
+
+def scheduling(G, trains, info, connections, num_rails):
+    paths = []
+    available_at = np.zeros(num_rails,dtype=int)
+    for train in trains:
+        _ , path = find_shortest_paths(G, train, available_at, info, connections)
+        paths.append(path)
+        available_at = update_availability(available_at, path)
+    return paths,available_at
+
+'''
+train = (0, #id del treno
+         (0,1,0), #pos: id del binario, direzione, distanza percorsa
+         (2,2), #target: nodo e punto cardinale
+         1 #speed
+         )
+
 train2 = (1, #id del treno
          (0,1,0), #pos: id del binario, direzione, distanza percorsa
          (0,0), #target: nodo e punto cardinale
          .25 #speed
          )
+'''
+#paths, available_at = scheduling((V,E),[train2,train])
 
-def scheduling(G,trains):
-    paths = []
-    available_at = np.zeros(no_trails,dtype=int)
-    for train in trains:
-        _ , path = find_shortest_paths((V,E),train,available_at)
-        paths.append(path)
-        available_at = update_availability(available_at,path)
-    return paths,available_at
-    
-paths, available_at = scheduling((V,E),[train2,train])
-
-print(paths)
-print(available_at)
+#print(paths)
+#print(available_at)

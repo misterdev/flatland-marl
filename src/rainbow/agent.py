@@ -63,16 +63,16 @@ class RainbowAgent():
         idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)  # Sample a batch of experience tuples
 
         # Calculate current state probabilities (online network noise already sampled)
-        log_ps = self.online_net(states, log=True)  # Log probabilities log p(s_t, ·; θonline)
-        log_ps_a = log_ps[range(self.batch_size), actions]  # log p(s_t, a_t; θonline), size(32, 51)
+        log_ps = self.online_net(states, log=True)  # Log probabilities log p(s_t, ·; θonline), shape(batch_size * history_length, action_space, num_atoms)
+        log_ps_a = log_ps[range(self.batch_size), actions]  # log p(s_t, a_t; θonline), shape(batch_size, num_atoms)
 
         with torch.no_grad():
             # Calculate nth next state probabilities
-            pns = self.online_net(next_states)  # Probabilities p(s_t+n, ·; θonline), size(128, 2, 51)
-            dns = self.support.expand_as(pns) * pns  # Distribution d_t+n = (z, p(s_t+n, ·; θonline))
-            argmax_indices_ns = dns.sum(2).argmax(1)  # Perform argmax action selection using online network: argmax_a[(z, p(s_t+n, a; θonline))], size(128)
+            pns = self.online_net(next_states)  # Probabilities p(s_t+n, ·; θonline), shape(batch_size * history_length, 2, 51)
+            dns = self.support.expand_as(pns) * pns  # Distribution d_t+n = (z, p(s_t+n, ·; θonline)), shape same as pns
+            argmax_indices_ns = dns.sum(2).argmax(1)  # Perform argmax action selection using online network: argmax_a[(z, p(s_t+n, a; θonline))], shape(64)
             self.target_net.reset_noise()  # Sample new target net noise
-            pns = self.target_net(next_states)  # Probabilities p(s_t+n, ·; θtarget), size(128, 2, 52)
+            pns = self.target_net(next_states)  # Probabilities p(s_t+n, ·; θtarget), size(64, 2, 51)
             pns_a = pns[range(self.batch_size), argmax_indices_ns]  # Double-Q probabilities p(s_t+n, argmax_a[(z, p(s_t+n, a; θonline))]; θtarget), size(128, 2, 51)
 
             # Compute Tz (Bellman operator T applied to z)
@@ -117,3 +117,10 @@ class RainbowAgent():
     # Set the network to evaluation mode
     def eval(self):
         self.online_net.eval()
+        
+    # Get all q values (2 actions) based on single state (no batch)
+    def get_q_values(self, state):
+        with torch.no_grad():
+            state = torch.from_numpy(state).float()
+            return (self.online_net(state.unsqueeze(0)) * self.support).sum(2)
+        

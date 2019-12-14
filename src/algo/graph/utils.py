@@ -3,8 +3,12 @@ from typing import NamedTuple
 from flatland.core.grid.grid4_utils import get_new_position, get_direction, direction_to_point
 from flatland.core.grid.rail_env_grid import RailEnvTransitions
 
+from src.algo.flat import scheduling 
+# TODO Refactor into a class
+
 CardinalNode = \
 	NamedTuple('CardinalNode', [('id_node', int), ('cardinal_point', int)])
+'''
 Train = \
 	NamedTuple('Train', [
 		('handle', int), 
@@ -12,7 +16,7 @@ Train = \
 		(('id_node', int), ('cp', int)), 
 		('speed', int)
 	])
-
+'''
 def map_to_graph(env):
 	
 	id_node_counter = 0
@@ -62,6 +66,7 @@ def map_to_graph(env):
 			
 	# Enumerate edges from these nodes
 	info = {} # Map id_edge : tuple (CardinalNode1, CardinalNode2, edge_length)
+	id_edge_to_cells = {} # Map id_edge : list of tuples (cell pos, crossing dir) in rail (nodes are not counted)
 	id_edge_counter = 0
 	# Start from connections of one node and follow path until next switch is found
 	nodes = connections.keys() # ids
@@ -70,6 +75,7 @@ def map_to_graph(env):
 		for cp in range(4): # Check edges from the 4 cardinal points
 			if np.count_nonzero(connections[n][cp, :]) > 0:
 				visited.add(CardinalNode(n, cp)) # Add to visited
+				cells_sequence = []
 				node_found = False
 				edge_length = 0
 				# Keep going until another node is found
@@ -77,7 +83,8 @@ def map_to_graph(env):
 				pos = id_node_to_cell[n]
 				while not node_found:
 					neighbour_pos = get_new_position(pos, direction)
-					if neighbour_pos in cell_to_id_node:
+					cells_sequence.append((neighbour_pos, direction))
+					if neighbour_pos in cell_to_id_node: # If neighbour is a node
 						# node_found = True
 						# Build edge, mark visited
 						id_node1 = n
@@ -89,6 +96,8 @@ def map_to_graph(env):
 											 (CardinalNode(id_node1, cp1), 
 											  CardinalNode(id_node2, cp2), 
 											  edge_length)})
+							cells_sequence.pop() # Don't include this node in the edge
+							id_edge_to_cells.update({id_edge_counter: cells_sequence})
 							id_edge_counter += 1
 							visited.add(CardinalNode(id_node2, cp2))
 						break
@@ -107,7 +116,11 @@ def map_to_graph(env):
 							
 	# Build graph object made of vertices and edges
 	edges = info.keys()
-	return (nodes, edges) # Graph as a tuple (list of vertices, list of edges)
+	
+	train = train_on_graph(env, 0, nodes, edges, id_node_to_cell, id_edge_to_cells)
+	paths, available_at = scheduling((nodes, edges), [train], info, connections, len(edges)) # TODO Rivedi params
+	
+	return nodes, edges # Graph as a tuple (list of vertices, list of edges)
 
 def reverse_dir(direction):
 	"""
@@ -125,16 +138,35 @@ def reverse_dir(direction):
 # una destinazione (id del nodo)
 # altre info
 
-def train_on_graph():
+# Tutti questi params andranno salvati nella classe TODO
+def train_on_graph(env, handle, nodes, edges, id_node_to_cell, id_edge_to_cells):
 	"""
 	:param: handle: agent id
-	:return: structure that represents a train on this graph
+	:return: structure that represents a train on this graph ((id_edge, crossing_dir, dist) , (id_target_node, cp), speed)
 	"""
+	agent = env.agents[handle]
+	agent_pos = agent.initial_position 
+	dist = 0 # Distance already walked along the rail
+	id_edge = None
+	id_target_node = None
+	crossing_dir = None
+	for e in edges:
+		# la dist Considera anche il tempo?
+		index = [x for x, y in enumerate(id_edge_to_cells[e]) if y[0][0] == agent_pos[0] and y[0][1] == agent_pos[1]]
+		if index: # If index is not empty
+			dist = index[0]
+			dir = id_edge_to_cells[e][dist][1]
+			crossing_dir = 0 if dir == agent.direction else 1 # Direction saved is considered as crossing_dir = 0
+			id_edge = e
+			break
 	
-	# Find rail
+	# Determine target id
+	for n in nodes:
+		if id_node_to_cell[n] == agent.target:
+			id_target_node = n
+			break
 	
-	# Determine crossing direction
-	# Determine distance already walked
-	# Speed
-	# Determine target id # TODO Targets are nodes!
-	pass
+	speed = agent.speed_data['speed']
+	
+	# cp depends on connections available in the target node
+	return handle, (id_edge, crossing_dir, dist), (id_target_node, 1), speed # Prova

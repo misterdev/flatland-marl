@@ -263,7 +263,7 @@ def main(args):
 					break
 			# Checkpoint the network every 'checkpoint_interval' episodes
 			if (args.checkpoint_interval != 0) and (ep % args.checkpoint_interval == 0):
-				dqn.save(results_dir, 'checkpoint.pth')
+				dqn.save(results_dir, 'ddqn-checkpoint.pth')
 					
 if __name__ == '__main__':
 

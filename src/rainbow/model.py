@@ -62,7 +62,7 @@ class DQN(nn.Module):
         self.fc_noisy_z_v = NoisyLinear(args.hidden_size, self.atoms, std_init=args.noisy_std)
         self.fc_noisy_z_a = NoisyLinear(args.hidden_size, action_space * self.atoms, std_init=args.noisy_std)
 
-    def forward(self, x, log=False): # x size(1, 43)
+    def forward(self, x, log=False):
 
         # Value stream
         v = self.fc_noisy_z_v(F.relu(self.fc_noisy_h_v(F.relu(self.fc_v(x)))))
@@ -74,7 +74,7 @@ class DQN(nn.Module):
             q = F.log_softmax(q, dim=2)  # Log probabilities with action over second dimension
         else:
             q = F.softmax(q, dim=2)  # Probabilities with action over second dimension
-        return q # size(1, 2, 51)
+        return q # size(1, 2, 51) 51 as the atoms
 
     def reset_noise(self):
         for name, module in self.named_children():
