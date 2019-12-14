@@ -29,6 +29,7 @@ from flatland.core.grid.grid_utils import coordinate_to_position, distance_on_ra
 
 from src.draw_obs_graph import build_graph
 from src.utils import assign_random_priority, assign_speed_priority, assign_priority
+from src.algo.graph.utils import map_to_graph
 
 
 class GraphObsForRailEnv(ObservationBuilder):
@@ -153,10 +154,9 @@ class GraphObsForRailEnv(ObservationBuilder):
         occupancy = np.append(occupancy, second_layer)
         # Bifurcation points, one-hot encoded layer of predicted cells where 1 means that this cell is a fork (global)
         forks = np.zeros(self.max_prediction_depth, dtype=int)
-        # Get full transitions of cells in the prediction
-        #for cell in self.cells_sequence[handle]:
-        # TODO
-        # Fill as 1 if transitions represent a fork cell
+        for cell in self.cells_sequence[handle]:
+        	# Fill as 1 if transitions represent a fork cell
+        	for 
         
         # Target
         target = np.zeros(self.max_prediction_depth, dtype=int)
@@ -271,10 +271,10 @@ class GraphObsForRailEnv(ObservationBuilder):
         """
         Build a graph (dict) of nodes, where nodes are identified by ids, graph is directed, depends on agent direction
         (that are tuples that represent the cell position, eg (11, 23))
-        :param handle: 
+        :param handle: agent id
         :return: 
         """
-        obs_graph = defaultdict(list)  # dict
+        obs_graph = defaultdict(list)  # Dict node (as pos) : adjacent nodes
         visited_nodes = set()  # set
         bfs_queue = []
         done = False  # True if agent has reached its target
@@ -350,10 +350,10 @@ class GraphObsForRailEnv(ObservationBuilder):
     def _explore_path(self, handle, position, direction):
         """
         Given agent handle, current position, and direction, explore that path until a new branching point is found.
-        :param handle: 
-        :param position: 
-        :param direction: 
-        :return: 
+        :param handle: agent id
+        :param position: agent position as cell 
+        :param direction: agent direction
+        :return: a tuple Node with its features
         """
 
         # Continue along direction until next switch or
@@ -411,7 +411,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         # TODO tmp build node features and save them here
         node = GraphObsForRailEnv.Node(cell_position=position,
                                        agent_direction=direction,
-                                       is_target=last_is_target) # TODO
+                                       is_target=last_is_target)
 
         return node
 
