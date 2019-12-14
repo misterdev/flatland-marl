@@ -60,7 +60,7 @@ def main(args):
         prediction_depth = args.prediction_depth
         bfs_depth = args.bfs_depth
         observation_builder = GraphObsForRailEnv(bfs_depth=bfs_depth, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
-        state_size = args.prediction_depth * 2 + 4 # TODO
+        state_size = args.prediction_depth * 3 + 4 # TODO
         network_action_size = 2  # {follow path, stop}
         railenv_action_size = 5  # The RailEnv possible actions
         agent = Agent(network_type='fc', state_size=state_size, action_size=network_action_size)
@@ -88,7 +88,7 @@ def main(args):
     max_steps = 200 # TODO DEBUG
     eps = 1.
     eps_end = 0.005
-    eps_decay = 0.9998
+    eps_decay = 0.998
     # Need to have two since env works with RailEnv actions but agent works with network actions
     network_action_dict = dict()
     railenv_action_dict = dict()
@@ -258,7 +258,7 @@ if __name__ == '__main__':
     parser.add_argument('--observation-builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
     parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
     parser.add_argument('--bfs-depth', type=int, default=4, help='BFS depth of the graph observation')
-    parser.add_argument('--prediction-depth', type=int, default=40, help='Prediction depth for shortest path strategy, i.e. length of a path')
+    parser.add_argument('--prediction-depth', type=int, default=108, help='Prediction depth for shortest path strategy, i.e. length of a path')
     parser.add_argument('--view-semiwidth', type=int, default=7, help='Semiwidth of field view for agent in local obs')
     parser.add_argument('--view-height', type=int, default=30, help='Height of the field view for agent in local obs')
     parser.add_argument('--offset', type=int, default=25, help='Offset of agent in local obs')
