@@ -110,7 +110,7 @@ def main(args):
 				  )
 	env.reset()
 	
-	state_size = args.prediction_depth * 3 + 4 # TODO
+	state_size = args.prediction_depth * 4 + 4 # TODO
 	action_space = args.network_action_space
 	network_action_dict = {}
 	railenv_action_dict = {}
@@ -276,7 +276,7 @@ def main(args):
 					break
 			# Checkpoint the network every 'checkpoint_interval' episodes
 			if (args.checkpoint_interval != 0) and (ep % args.checkpoint_interval == 0):
-				dqn.save(results_dir, 'ddqn-checkpoint.pth')
+				dqn.save(results_dir, 'checkpoint.pth')
 					
 if __name__ == '__main__':
 
