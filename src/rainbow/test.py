@@ -100,6 +100,7 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
             for a in range(env.get_num_agents()):
                 if info['action_required'][a]:
                     network_action = dqn.act(state[a])  # Choose an action greedily (with noisy weights)
+                    # network_action = 0
                     railenv_action = observation_builder.choose_railenv_action(a, network_action)
                     qvalues.update({a: dqn.get_q_values(state[a])})
                 else:
