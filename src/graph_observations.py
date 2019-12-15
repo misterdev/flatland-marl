@@ -135,7 +135,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         # Occupancy
         occupancy, conflicting_agents = self._fill_occupancy(handle)
         # TODO This can be done inside _fill_occupancy - temp not using a second layer
-        # Augment occupancy with another one-hot encoded layer: 1 if this cell is overlapping and the conflict span was already entered by some agent
+        # Augment occupancy with another one-hot encoded layer: 1 if this cell is overlapping and the conflict span was already entered by some other agent
         
         second_layer = np.zeros(self.max_prediction_depth, dtype=int) # Same size as occupancy
         for ca in conflicting_agents:
@@ -590,13 +590,12 @@ class GraphObsForRailEnv(ObservationBuilder):
                     i += 1
         return overlapping_paths
     
-    # TODO Complete here
     def _find_forks(self):
         """
         A fork (in the map) is either a switch or a diamond crossing.
         :return: 
         """
-        forks = [] # List of nodes as tuples/coordinates
+        forks = set() # Set of nodes as tuples/coordinates
         # Identify cells hat are nodes (have switches)
         for i in range(self.env.height):
             for j in range(self.env.width):
@@ -618,6 +617,6 @@ class GraphObsForRailEnv(ObservationBuilder):
                             is_switch = True
 
                 if is_switch or is_crossing:
-                    forks.append((i, j))
+                    forks.add((i, j))
         
         return forks
