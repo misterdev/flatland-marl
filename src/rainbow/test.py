@@ -18,7 +18,6 @@ from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 from src.graph_observations import GraphObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
 
-from src.algo.graph.utils import map_to_graph
 
 # Test DQN
 def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
@@ -97,9 +96,6 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
             env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
             
         for step in range(max_time_steps - 1):
-            # TODO
-            #if step == 10:
-            #    map_to_graph(env)
             # Choose actions
             for a in range(env.get_num_agents()):
                 if info['action_required'][a]:
@@ -118,7 +114,14 @@ def test(args, T, ep, dqn, val_mem, metrics, results_dir, evaluate=False):
                 for a in range(env.get_num_agents()):
                     print('#########################################')
                     print('Info for agent {}'.format(a))
-                    print('Obs: {}'.format(state[a]))
+                    print('Occupancy: {}'.format(state[a][:args.prediction_depth]))
+                    #print('Occupancy, second layer: {}'.format(state[a][args.prediction_depth:args.prediction_depth*2]))
+                    print('Forks: {}'.format(state[a][args.prediction_depth:args.prediction_depth*2]))
+                    print('Target: {}'.format(state[a][args.prediction_depth*2:args.prediction_depth*3]))
+                    print('Priority: {}'.format(state[a][args.prediction_depth*3]))
+                    print('Max priority encountered: {}'.format(state[a][args.prediction_depth*3 + 1]))
+                    print('Num malfunctoning agents (globally): {}'.format(state[a][args.prediction_depth*3 + 2]))
+                    print('Num agents ready to depart (globally): {}'.format(state[a][args.prediction_depth*3 + 3]))
                     print('Status: {}'.format(info['status'][a]))
                     print('Position: {}'.format(env.agents[a].position))
                     print('Moving? {} at speed: {}'.format(env.agents[a].moving, info['speed'][a]))

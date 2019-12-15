@@ -200,19 +200,33 @@ def main(args):
 	
 				next_state, reward, done, info = env.step(railenv_action_dict)  # Env step
 				
-				if args.debug:
-					for a in range(env.get_num_agents()):
-						print('#########################################')
-						print('Info for agent {}'.format(a))
-						print('Obs: {}'.format(state[a]))
-						print('Status: {}'.format(info['status'][a]))
-						print('Moving? {} at speed: {}'.format(env.agents[a].moving, info['speed'][a]))
-						print('Action required? {}'.format(info['action_required'][a]))
-						print('Network action: {}'.format(network_action_dict[a]))
-						print('Railenv action: {}'.format(railenv_action_dict[a]))
-						print('Q value: {}'.format(qvalues[a]))
-					#print('QValues: {}'.format(qvalues))
-						print('Rewards: {}'.format(reward[a]))
+				'''
+				if T == 100: # Print only at 100th steps of each episode
+					if args.debug:
+						for a in range(env.get_num_agents()):
+							print('#########################################')
+							print('Info for agent {}'.format(a))
+							print('Occupancy, first layer: {}'.format(state[a][:args.prediction_depth]))
+							print('Occupancy, second layer: {}'.format(
+								state[a][args.prediction_depth:args.prediction_depth * 2]))
+							print('Forks: {}'.format(state[a][args.prediction_depth * 2:args.prediction_depth * 3]))
+							print('Target: {}'.format(state[a][args.prediction_depth * 3:args.prediction_depth * 4]))
+							print('Priority: {}'.format(state[a][args.prediction_depth * 4]))
+							print('Max priority encountered: {}'.format(state[a][args.prediction_depth * 4 + 1]))
+							print('Num malfunctoning agents (globally): {}'.format(state[a][args.prediction_depth * 4 + 2]))
+							print(
+								'Num agents ready to depart (globally): {}'.format(state[a][args.prediction_depth * 4 + 3]))
+							print('Status: {}'.format(info['status'][a]))
+							print('Position: {}'.format(env.agents[a].position))
+							print('Moving? {} at speed: {}'.format(env.agents[a].moving, info['speed'][a]))
+							print('Action required? {}'.format(info['action_required'][a]))
+							print('Network action: {}'.format(network_action_dict[a]))
+							print('Railenv action: {}'.format(railenv_action_dict[a]))
+							print('Q values: {}'.format(qvalues[a]))
+				'''
+				if T == 100:
+					print('QValues: {}'.format(qvalues))
+					print('Rewards: {}'.format(reward))
 					
 				# Clip reward and update replay buffer
 				for a in range(env.get_num_agents()):
@@ -277,8 +291,8 @@ if __name__ == '__main__':
 	parser.add_argument('--hidden-size', type=int, default=512, metavar='SIZE', help='Network hidden size')
 	parser.add_argument('--noisy-std', type=float, default=0.1, metavar='σ', help='Initial standard deviation of noisy linear layers')
 	parser.add_argument('--atoms', type=int, default=51, metavar='C', help='Discretised size of value distribution')
-	parser.add_argument('--V-min', type=float, default=-20, metavar='V', help='Minimum of value distribution support')
-	parser.add_argument('--V-max', type=float, default=2, metavar='V', help='Maximum of value distribution support')
+	parser.add_argument('--V-min', type=float, default=-30, metavar='V', help='Minimum of value distribution support')
+	parser.add_argument('--V-max', type=float, default=1, metavar='V', help='Maximum of value distribution support')
 	parser.add_argument('--model', type=str, metavar='PARAMS', help='Pretrained model (state dict)')
 	parser.add_argument('--memory-capacity', type=int, default=int(1e6), metavar='CAPACITY', help='Experience replay memory capacity')
 	parser.add_argument('--replay-frequency', type=int, default=4, metavar='k', help='Frequency of sampling from memory')

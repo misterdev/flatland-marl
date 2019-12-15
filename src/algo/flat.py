@@ -16,8 +16,15 @@ import time
 # una destinazione (id del nodo)
 # altre info
 
-def insert(a,frontier,visited):
-    (t,ct),len, tim, path = a
+def insert(a, frontier,visited):
+    """
+    
+    :param a: 
+    :param frontier: 
+    :param visited: 
+    :return: 
+    """
+    (t, ct), length, tim, path = a
     if (t,ct) in visited:
         #print("visited : {}".format((t,ct)))
         return frontier
@@ -25,54 +32,62 @@ def insert(a,frontier,visited):
         return([a])
     else:
         new_frontier = []
-        (x,xc),xlen,xtime,xpath = frontier[0]
+        (x,xc), xlength, xtime, xpath = frontier[0]
         tail = frontier[1:]
-        while (xlen < len and not(tail==[])):
-            new_frontier.append(((x,xc),xlen,xtime,xpath))
-            (x,xc),xlen,xtime,xpath = tail[0]
+        while xlength < length and not(tail==[]):
+            new_frontier.append(((x,xc), xlength, xtime, xpath))
+            (x,xc), xlength, xtime, xpath = tail[0]
             tail = tail[1:]
-        if xlen < len: 
-            new_frontier.append(((x,xc),xlen,xtime,xpath))
+        if xlength < length: 
+            new_frontier.append(((x,xc), xlength, xtime, xpath))
         else:
-            tail.append(((x,xc),xlen,xtime,xpath))  #put back in tail
-        new_frontier.append(((t,ct),len,tim,path))
+            tail.append(((x,xc), xlength, xtime, xpath))  #put back in tail
+        new_frontier.append(((t,ct), length, tim, path))
         new_frontier = new_frontier + tail
-        return(new_frontier)
+        
+        return new_frontier
 
-def insert_wrt_time(a,frontier,visited):
-    (t,ct),len, tim, path = a
+def insert_wrt_time(a, frontier, visited):
+    """
+    
+    :param a: 
+    :param frontier: 
+    :param visited: 
+    :return: 
+    """
+    (t,ct), length, tim, path = a
     if (t,ct) in visited:
         #print("visited : {}".format((t,ct)))
         return frontier
     elif frontier==[]:
-        return([a])
+        return [a]
     else:
         new_frontier = []
-        (x,xc),xlen,xtime,xpath = frontier[0]
+        (x,xc), xlength, xtime, xpath = frontier[0]
         tail = frontier[1:]
-        while (xtime < tim and not(tail==[])):
-            new_frontier.append(((x,xc),xlen,xtime,xpath))
-            (x,xc),xlen,xtime,xpath = tail[0]
+        while xtime < tim and not(tail==[]):
+            new_frontier.append(((x,xc), xlength, xtime, xpath))
+            (x,xc), xlength, xtime, xpath = tail[0]
             tail = tail[1:]
         if xtime < tim: 
-            new_frontier.append(((x,xc),xlen,xtime,xpath))
+            new_frontier.append(((x,xc),xlength,xtime,xpath))
         else:
-            tail.append(((x,xc),xlen,xtime,xpath))  #put back in tail
-        new_frontier.append(((t,ct),len,tim,path))
+            tail.append(((x,xc), xlength, xtime, xpath))  #put back in tail
+        new_frontier.append(((t,ct),length,tim,path))
         new_frontier = new_frontier + tail
-        return(new_frontier)    
+        return new_frontier    
 
 def find_shortest_paths(G, train, available_at, info, connections):
-    print(available_at)
+    #print(available_at)
     #available_at is a map associating to each rail the timestep
     #at which it will be available. We keep the invariant that if a
     #rail is available at time t0, it will be available at any time
     #t > t0 (with the current scheduling)
     #The greedy policy books, for each train, ALL rails along its path,
     #until its transit on the rail
-    V,E = G
+    V, E = G
     idtrain,pos,target,speed = train
-    print("train id: {}".format(idtrain))
+    #print("train id: {}".format(idtrain))
     rail,direction,dist = pos
     (s,cs),(t,ct), l = info[rail]
     
@@ -121,7 +136,7 @@ def find_shortest_paths(G, train, available_at, info, connections):
                     #frontier = insert(((s,cs),newlenght,transit_time,newpath),frontier,visited)
                     frontier = insert_wrt_time(((s,cs),newlenght,transit_time,newpath),frontier,visited)
         if not frontier:
-            print("no path found")
+            #print("no path found")
             current_path = [] #empty path means failure
             break
         else:
@@ -130,7 +145,7 @@ def find_shortest_paths(G, train, available_at, info, connections):
             frontier = frontier[1:]
     return current_length,current_path
 
-print("fine")
+#print("fine")
 
 
 #esempio

@@ -29,7 +29,6 @@ from flatland.core.grid.grid_utils import coordinate_to_position, distance_on_ra
 
 from src.draw_obs_graph import build_graph
 from src.utils import assign_random_priority, assign_speed_priority, assign_priority
-from src.algo.graph.utils import map_to_graph
 
 
 class GraphObsForRailEnv(ObservationBuilder):
@@ -67,7 +66,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         Inherited method used for pre computations.
         :return: 
         """
-        self.env_graph = map_to_graph(self.env) # Graph of the environment as tuple (nodes, edges) - as computed in src.algo.graph.utils.py
+        #self.env_graph = map_to_graph(self.env) # Graph of the environment as tuple (nodes, edges) - as computed in src.algo.graph.utils.py
         
 
     def get_many(self, handles: Optional[List[int]] = None) -> {}:
@@ -133,6 +132,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         occupancy, conflicting_agents = self._fill_occupancy(handle)
         # TODO This can be done inside _fill_occupancy - temp not using a second layer
         # Augment occupancy with another one-hot encoded layer: 1 if this cell is overlapping and the conflict span was already entered by some agent
+        '''
         second_layer = np.zeros(self.max_prediction_depth, dtype=int) # Same size as occupancy
         for ca in conflicting_agents:
             if ca != handle:
@@ -148,37 +148,32 @@ class GraphObsForRailEnv(ObservationBuilder):
                     while i < self.max_prediction_depth:
                         second_layer[i] = 1 if occupancy[i] > 0 else 0
                         i += 1
-        # TODO I could try to remove the second layer and incorporate those info into the first one, so that if a span
-        # is already occupied it becomes 0 for the agent that has priority - it's a mistery how it will deal with priority
+        '''
         #print('Agent {}'.format(handle))
         #print('Occupancy, first layer: {}'.format(occupancy))
         #print('Occupancy, second layer: {}'.format(second_layer))
-        if agent.status == RailAgentStatus.ACTIVE:
-            overlapping_paths = self._compute_overlapping_paths_with_current_ts(handle)
-            for ca in conflicting_agents:
-                if overlapping_paths[ca][0]: # If current ts is 1 then span was already occupied
-                    i = 0
-                    while occupancy[i] and i < self.max_prediction_depth - 1: # Free the span
-                        occupancy[i] = 0
-                        i += 1
+        overlapping_paths = self._compute_overlapping_paths_with_current_ts(handle)
+        for ca in conflicting_agents:
+            if overlapping_paths[ca][0]: # If current ts is 1 then span was already occupied ma potrebbe esserlo perché l'altro lo ha occupato!
+                i = 0
+                while occupancy[i] and i < self.max_prediction_depth - 1: # Free the span
+                    occupancy[i] = 0
+                    i += 1
 
         # occupancy = np.append(occupancy, second_layer)
         # Bifurcation points, one-hot encoded layer of predicted cells where 1 means that this cell is a fork 
         # (globally - considering cell transitions not depending on agent orientation) 
-        # Forks are switches or diamond crossings - see xor after finding targets
         forks = np.zeros(self.max_prediction_depth, dtype=int)
         # Target
         target = np.zeros(self.max_prediction_depth, dtype=int)
-        vertices, _ = self.env_graph
+        forks_coords = self._find_forks()
         for index in range(self.max_prediction_depth):
             # Fill as 1 if transitions represent a fork cell
             cell = self.cells_sequence[handle][index]
-            if cell in vertices:
+            if cell in forks_coords:
                 forks[index] = 1
             if cell == agent.target:
                 target[index] = 1
-                
-            forks[index] = 0 if (forks[index] and target[index]) else forks[index] # Targets are not forks
         
         # print('Forks: {}'.format(forks))
         # print('Target: {}'.format(target))
@@ -201,7 +196,7 @@ class GraphObsForRailEnv(ObservationBuilder):
             if a.malfunction_data['malfunction'] != 0:
                 n_agents_malfunctioning += 1  # Considering ALL agents
                 
-        #print('Num malfunctoning agents (globally): {}'.format(n_agents_malfunctioning))
+        #print('Num malfunctioning agents (globally): {}'.format(n_agents_malfunctioning))
 
         # Agents status (agents ready to depart) - it tells the agent how many will appear - encountered? or globally?
         n_agents_ready_to_depart = 0
@@ -210,7 +205,7 @@ class GraphObsForRailEnv(ObservationBuilder):
                 n_agents_ready_to_depart += 1  # Considering ALL agents
                 
         #print('Num agents ready to depart (globally): {}'.format(n_agents_ready_to_depart))
-        # shape (prediction_depth * 4 + 4, )
+        # shape (prediction_depth * 3 + 4, )
         agent_obs = np.append(occupancy, forks)
         agent_obs = np.append(agent_obs, target)
         agent_obs = np.append(agent_obs, (priority, max_prio_encountered, n_agents_malfunctioning, n_agents_ready_to_depart))
@@ -556,14 +551,22 @@ class GraphObsForRailEnv(ObservationBuilder):
                         overlapping_paths[a, i] = 1
                     i += 1
         return overlapping_paths
-    
+    # TODO Debug this fun
     def _compute_overlapping_paths_with_current_ts(self, handle):
         """
         """
+        agent = self.env.agents[handle]
         overlapping_paths = np.zeros((self.env.get_num_agents(), self.max_prediction_depth + 1), dtype=int)
         cells_sequence = self.predicted_pos_list[handle]
         # Prepend current ts
-        int_pos = coordinate_to_position(self.env.width, [self.env.agents[handle].position])
+        # TODO Devo tenere conto del fatto che potrei trovarmi in una cella per mezzo timestep perché sono lento
+        # es, vado a velocità 0.5, ad entrata della cella devo decidere cosa fare, controllo se mi trovo in un 
+        # conflict span, controllare se questa cosa funziona insomma
+        if agent.status == RailAgentStatus.ACTIVE: 
+            virtual_position = agent.position
+        elif agent.status == RailAgentStatus.READY_TO_DEPART:
+            virtual_position = agent.initial_position
+        int_pos = coordinate_to_position(self.env.width, [virtual_position])
         cells_sequence = np.append(int_pos[0], cells_sequence)
         for a in range(len(self.env.agents)):
             if a != handle and self.env.agents[a].status == RailAgentStatus.ACTIVE:
@@ -577,3 +580,35 @@ class GraphObsForRailEnv(ObservationBuilder):
                         overlapping_paths[a, i] = 1
                     i += 1
         return overlapping_paths
+    
+    # TODO Complete here
+    def _find_forks(self):
+        """
+        A fork (in the map) is either a switch or a diamond crossing.
+        :return: 
+        """
+        forks = [] # List of nodes as tuples/coordinates
+        # Identify cells hat are nodes (have switches)
+        for i in range(self.env.height):
+            for j in range(self.env.width):
+
+                is_switch = False
+                is_crossing = False
+
+                # Check if diamond crossing
+                transitions_bit = bin(self.env.rail.get_full_transitions(i, j))
+                if int(transitions_bit, 2) == int('1000010000100001', 2):
+                    is_crossing = True
+
+                else:
+                    # Check if switch
+                    for direction in (0, 1, 2, 3):  # 0:N, 1:E, 2:S, 3:W
+                        possible_transitions = self.env.rail.get_transitions(i, j, direction)
+                        num_transitions = np.count_nonzero(possible_transitions)
+                        if num_transitions > 1:
+                            is_switch = True
+
+                if is_switch or is_crossing:
+                    forks.append((i, j))
+        
+        return forks

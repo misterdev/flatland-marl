@@ -44,14 +44,13 @@ schedule_generator = sparse_schedule_generator(speed_ration_map)
 prediction_depth = 40
 observation_builder = GraphObsForRailEnv(bfs_depth=4, predictor=ShortestPathPredictorForRailEnv(max_depth=prediction_depth))
 
-state_size = prediction_depth - 1 + 4
+state_size = prediction_depth * 4 + 4
 network_action_size = 2
 controller = Agent('fc', state_size, network_action_size)
 network_action_dict = dict()
 railenv_action_dict = dict()
 
-
-with path(src.nets, "single_reward200.pth") as file_in:
+with path(src.nets, "2019-12-14-ddqn-checkpoint300.pth") as file_in:
     controller.qnetwork_local.load_state_dict(torch.load(file_in))
 
 
@@ -84,7 +83,7 @@ for test in tests:
     # Initiate the renderer
     env_renderer = RenderTool(env, 
                               gl="PILSVG",
-                              agent_render_variant=AgentRenderVariant.ONE_STEP_BEHIND,
+                              agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS_AND_BOX,
                               show_debug=True,
                               screen_height=1080,
                               screen_width=1920)
