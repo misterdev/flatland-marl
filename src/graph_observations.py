@@ -463,24 +463,27 @@ class GraphObsForRailEnv(ObservationBuilder):
             for ca in conflicting_agents[0]:
                 if self.env.agents[ca].status == RailAgentStatus.ACTIVE:
                     if self.predicted_dir[ts][handle] != self.predicted_dir[ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[ts][ca])] == 1:
-                        occupancy_counter += 1
-                        conflicting_agents_ts.add(ca)
+                        if not (self._is_following(ca, handle)):
+                            occupancy_counter += 1
+                            conflicting_agents_ts.add(ca)
                     
         elif int_pos in np.delete(self.predicted_pos[pre_ts], handle, 0):
             conflicting_agents = np.where(self.predicted_pos[pre_ts] == int_pos)
             for ca in conflicting_agents[0]:
                 if self.env.agents[ca].status == RailAgentStatus.ACTIVE:
                     if self.predicted_dir[ts][handle] != self.predicted_dir[pre_ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[pre_ts][ca])] == 1:
-                        occupancy_counter += 1
-                        conflicting_agents_ts.add(ca)
+                        if not (self._is_following(ca, handle)):
+                            occupancy_counter += 1
+                            conflicting_agents_ts.add(ca)
                             
         elif int_pos in np.delete(self.predicted_pos[post_ts], handle, 0):
             conflicting_agents = np.where(self.predicted_pos[post_ts] == int_pos)
             for ca in conflicting_agents[0]:
                 if self.env.agents[ca].status == RailAgentStatus.ACTIVE:
                     if self.predicted_dir[ts][handle] != self.predicted_dir[post_ts][ca] and cell_transitions[self._reverse_dir(self.predicted_dir[post_ts][ca])] == 1:
-                        occupancy_counter += 1
-                        conflicting_agents_ts.add(ca)
+                        if not (self._is_following(ca, handle)):
+                            occupancy_counter += 1
+                            conflicting_agents_ts.add(ca)
                             
         return occupancy_counter, conflicting_agents_ts
 
@@ -620,3 +623,27 @@ class GraphObsForRailEnv(ObservationBuilder):
                     forks.add((i, j))
         
         return forks
+    
+    def _is_following(self, handle1, handle2):
+        """
+        Checks whether the agent with higher handle is (probably) following the other one.
+        invariant handle1 < handle2
+        :param handle1: 
+        :param handle2: 
+        :return: 
+        """
+        '''
+        if handle1 > handle2:
+            handle2, handle1 = handle1, handle2
+        '''
+        agent1 = self.env.agents[handle1]
+        agent2 = self.env.agents[handle2]
+        
+        # if agent1.status == RailAgentStatus.ACTIVE and agent2.status == RailAgentStatus.ACTIVE:
+        if agent1.initial_position == agent2.initial_position and agent1.initial_direction == agent2.initial_direction and agent1.target == agent2.target:
+                return True
+        else:
+            return False
+        
+        
+        
