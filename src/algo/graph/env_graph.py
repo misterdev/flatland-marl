@@ -1,9 +1,7 @@
 import numpy as np
 from typing import NamedTuple
 from flatland.core.grid.grid4_utils import get_new_position, get_direction, direction_to_point
-from flatland.core.grid.rail_env_grid import RailEnvTransitions
-
-from src.algo.flat import scheduling 
+from src.algo.shortest_path import scheduling
 
 CardinalNode = \
 	NamedTuple('CardinalNode', [('id_node', int), ('cardinal_point', int)])
@@ -18,16 +16,22 @@ Train = \
 '''
 
 class EnvGraph():
+	"""
+	This class provides a simplified representation of the environment.
+	The map is a graph G = (V, E) where V are switches and E are rails connecting these switches.
+	"""
 
 	def __init__(self, env, strategy):
 		self.env = env
-		self.strategy = strategy
+		self.strategy = strategy # TODO 
 		self.cell_to_id_node = {} # Map cell position : id_node
 		self.id_node_to_cell = {} # Map id_node to cell position
 		self.connections = {} # Map id_node : connections(node)
 		self.info = {} # Map id_edge : tuple (CardinalNode1, CardinalNode2, edge_length)
 		self.id_edge_to_cells = {} # Map id_edge : list of tuples (cell pos, crossing dir) in rail (nodes are not counted)
-	
+		self.nodes = set() # Set of node ids
+		self.edges = set() # Set of edge ids
+		self.trains = [] # List of trains in this env
 	
 	def reset(self):
 		"""
@@ -135,10 +139,13 @@ class EnvGraph():
 		edges = self.info.keys()
 		
 		# Create trains
-		trains = []
+		self.trains = [self._train_on_graph(a, nodes, edges) for a in range(self.env.get_num_agents())]
+		'''
 		for a in self.env.get_num_agents():
-			trains.append(self._train_on_graph(0, nodes, edges))
-		paths, available_at = scheduling((nodes, edges), [train], info, connections, len(edges)) # TODO Rivedi params
+			trains.append(self._train_on_graph(a, nodes, edges))
+		'''
+		self.nodes = nodes
+		self.edges = edges
 		
 		return self.cell_to_id_node.keys(), edges # Graph as a tuple (list of vertices pos, list of edges) TODO Change return and change in GraphObs
 
@@ -160,8 +167,15 @@ class EnvGraph():
 
 	def _train_on_graph(self, handle, nodes, edges):
 		"""
+		Given an agent/a train in the env returns a representation of it that is suitable for the EnvGraph.
 		:param: handle: agent id
-		:return: structure that represents a train on this graph ((id_edge, crossing_dir, dist) , (id_target_node, cp), speed)
+		:return: ((id_edge, crossing_dir, dist) , (id_target_node, {possible cps}), speed) where
+		id_edge: id of the rail where agent currently lies
+		crossing_dir: direction in which the agent is crossing the rail (1 if from node1 to node2, 0 otherwise)
+		dist: total distance walked from the beginning of the rail
+		id_target_node: id of the node where agent's target lies
+		possible_cps: set of possible cardinal points from which the agent may enter its target
+		speed: agent speed
 		"""
 		agent = self.env.agents[handle]
 		agent_pos = agent.initial_position 
@@ -170,12 +184,12 @@ class EnvGraph():
 		id_target_node = None
 		crossing_dir = None
 		for e in edges:
-			# la dist Considera anche il tempo?
-			index = [x for x, y in enumerate(id_edge_to_cells[e]) if y[0][0] == agent_pos[0] and y[0][1] == agent_pos[1]]
+			# la dist Considera anche il tempo? TODO
+			index = [x for x, y in enumerate(self.id_edge_to_cells[e]) if y[0][0] == agent_pos[0] and y[0][1] == agent_pos[1]]
 			if index: # If index is not empty
 				dist = index[0]
 				dir = self.id_edge_to_cells[e][dist][1]
-				crossing_dir = 0 if dir == agent.direction else 1 # Direction saved is considered as crossing_dir = 0
+				crossing_dir = 1 if dir == agent.direction else 0 # Direction saved is considered as crossing_dir = 1
 				id_edge = e
 				break
 		
@@ -187,5 +201,22 @@ class EnvGraph():
 		
 		speed = agent.speed_data['speed']
 		
-		# cp depends on connections available in the target node
-		return handle, (id_edge, crossing_dir, dist), (id_target_node, 1), speed # Prova
+		# Possible cps to enter target node depend on connections available
+		target_connections = self.connections[id_target_node]
+		cps = []
+		for i in range(4):
+			if np.any(target_connections[i]):
+				cps.append(i)
+				
+		return handle, (id_edge, crossing_dir, dist), (id_target_node, cps), speed
+	
+	# def run_strategy...
+
+	def run_shortest_path(self):
+		"""
+		
+		:return: 
+		"""
+		paths, available_at = scheduling((self.nodes, self.edges), self.trains, self.info, self.connections)
+		return paths, available_at
+

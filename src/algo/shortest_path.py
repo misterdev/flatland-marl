@@ -16,7 +16,7 @@ import time
 # una destinazione (id del nodo)
 # altre info
 
-def insert(a, frontier,visited):
+def insert(a, frontier, visited):
     """
     
     :param a: 
@@ -85,67 +85,79 @@ def find_shortest_paths(G, train, available_at, info, connections):
     #t > t0 (with the current scheduling)
     #The greedy policy books, for each train, ALL rails along its path,
     #until its transit on the rail
-    V, E = G
-    idtrain,pos,target,speed = train
-    #print("train id: {}".format(idtrain))
-    rail,direction,dist = pos
-    (s,cs),(t,ct), l = info[rail]
     
-    current_length = l-dist
-    current_time = int(current_length/speed)+available_at[rail]
-    current_path = [(rail, #id del binario
-             direction, #direzione di percorrenza
-             current_time, #at exit time the rail will be availbale again
-             )]
-    visited = []
-    frontier = []
-    if direction == 1:
-        current_node, current_c = t,ct
-    else:
-        current_node, current_c = s,cs
-   
-    #invariante: mantengo la frontier ordinata rispetto alle lunghezze correnti 
-    #todo = [n for n in V if not(n==target_node)]
-    #print("ct before while {}",current_time)
-    while not((current_node,current_c) == target):
-        #print(frontier)
-        #time.sleep(1)
-        visited.append((current_node,current_c))
-        #cerco i binari adiacenti al current_node
-        for e in E:
-            (s,cs),(t,ct),l = info[e]
-            if ((s == current_node and connections[current_node][current_c,cs]==1) or
-                (t == current_node and connections[current_node][current_c,ct]==1)):
-                newlenght = current_length + l
-                newpath = list(current_path)
-                #if we want to use this rail, we need to wait until it is available
-                new_current_time = max(current_time, available_at[e])
-                transit_time = new_current_time +int(l/speed)
-                if s == current_node:
-                    #print("right {}".format(e))
-                    newpath.append((e,1,transit_time))  #direction = 1 !!
-                    #aggiungo alla frontiera la tuple ((t,ct),s_lenght,newpath) se non e' gia'
-                    #stata visitata
-                    #print(frontier)
-                    #frontier = insert(((t,ct),newlenght,transit_time,newpath),frontier,visited)
-                    frontier = insert_wrt_time(((t,ct),newlenght,transit_time,newpath),frontier,visited)
-                    #print(frontier)
-                else: #t == current_node
-                    #print("left {}".format(e))
-                    newpath.append((e,0,transit_time))  #direction = 0 !!
-                    #frontier = insert(((s,cs),newlenght,transit_time,newpath),frontier,visited)
-                    frontier = insert_wrt_time(((s,cs),newlenght,transit_time,newpath),frontier,visited)
-        if not frontier:
-            #print("no path found")
-            current_path = [] #empty path means failure
-            break
+    V, E = G
+    shortest_paths = []
+    id_train, pos, target, speed = train
+    for cp in target[1]: # Build a shortest path for each possible entry point of the target node
+        #print("train id: {}".format(id_train))
+        rail, direction, dist = pos
+        (s, cs), (t, ct), l = info[rail]
+        
+        current_length = l-dist
+        current_time = int(current_length/speed) + available_at[rail]
+        current_path = [(
+            rail, #id del binario
+            direction, #direzione di percorrenza
+            current_time, #at exit time the rail will be availbale again
+        )]
+        visited = []
+        frontier = []
+        if direction == 1:
+            current_node, current_c = t, ct
         else:
-            (current_node,current_c),current_length,current_time,current_path = frontier[0]
-            #print("current from frontier = {}", current_time)
-            frontier = frontier[1:]
-    return current_length,current_path
-
-#print("fine")
+            current_node, current_c = s, cs
+       
+        #invariante: mantengo la frontier ordinata rispetto alle lunghezze correnti 
+        #todo = [n for n in V if not(n==target_node)]
+        #print("ct before while {}",current_time)
+        while not (current_node, current_c) == (target[0], cp):
+            #print(frontier)
+            #time.sleep(1)
+            visited.append((current_node,current_c))
+            #cerco i binari adiacenti al current_node
+            for e in E:
+                (s,cs),(t,ct),l = info[e]
+                if ((s == current_node and connections[current_node][current_c, cs] == 1) or
+                    (t == current_node and connections[current_node][current_c, ct] == 1)):
+                    new_length = current_length + l
+                    new_path = list(current_path)
+                    #if we want to use this rail, we need to wait until it is available
+                    new_current_time = max(current_time, available_at[e])
+                    transit_time = new_current_time +int(l/speed)
+                    if s == current_node:
+                        #print("right {}".format(e))
+                        new_path.append((e, 1, transit_time))  #direction = 1 !!
+                        #aggiungo alla frontiera la tuple ((t,ct),s_lenght,new_path) se non e' gia'
+                        #stata visitata
+                        #print(frontier)
+                        #frontier = insert(((t,ct),newlenght,transit_time,new_path),frontier,visited)
+                        frontier = insert_wrt_time(((t,ct),new_length,transit_time,new_path),frontier,visited)
+                        #print(frontier)
+                    else: #t == current_node
+                        #print("left {}".format(e))
+                        new_path.append((e, 0, transit_time))  #direction = 0 !!
+                        #frontier = insert(((s,cs),newlenght,transit_time,new_path),frontier,visited)
+                        frontier = insert_wrt_time(((s,cs), new_length, transit_time, new_path), frontier, visited)
+            if not frontier:
+                # print("No path found")
+                current_path = [] #empty path means failure
+                break
+            else:
+                (current_node, current_c), current_length, current_time, current_path = frontier[0]
+                #print("current from frontier = {}", current_time)
+                frontier = frontier[1:]
+    
+        shortest_paths.append((current_length, current_path))
+    # return current_length, current_path
+    index = 0
+    min_length = shortest_paths[0][0]
+    for i in range(1, len(shortest_paths)):
+        if shortest_paths[i][0] < min_length:
+            min_length = shortest_paths[i][0]
+            index = i
+    
+    return shortest_paths[index]
 
 
 #esempio
@@ -194,22 +206,39 @@ def info(e):
 #lenght,path = find_shortest_paths((V,E),train,available_at)
 
 def update_availability(available_at, path):
-    for (e,dir,transit_time) in path:
-        available_at[e]=transit_time
+    """
+    
+    :param available_at: 
+    :param path: 
+    :return: 
+    """
+    for (id_edge, direction, transit_time) in path[1]:
+        available_at[id_edge] = transit_time
     return available_at
 
 #available_at = update_availability(available_at,path)
 #print(available_at)
 
 
-def scheduling(G, trains, info, connections, num_rails):
+def scheduling(G, trains, info, connections):
+    """
+    
+    :param G: 
+    :param trains: 
+    :param info: 
+    :param connections: 
+    :return: paths: , available_at: list of times at which edges will be available again (index in list corresponds to edge id)
+    """
     paths = []
-    available_at = np.zeros(num_rails,dtype=int)
+    num_rails = len(G[1]) # G[0] = vertices, G[1] = edges
+    available_at = np.zeros(num_rails, dtype=int)
+    # TODO Agents order matters
     for train in trains:
-        _ , path = find_shortest_paths(G, train, available_at, info, connections)
+        path = find_shortest_paths(G, train, available_at, info, connections)
         paths.append(path)
         available_at = update_availability(available_at, path)
-    return paths,available_at
+        
+    return paths, available_at
 
 '''
 train = (0, #id del treno
