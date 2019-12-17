@@ -68,7 +68,7 @@ class GraphObsForRailEnv(ObservationBuilder):
         Inherited method used for pre computations.
         :return: 
         """
-        #self.env_graph = map_to_graph(self.env) # Graph of the environment as tuple (nodes, edges) - as computed in src.algo.graph.utils.py
+        #self.env_graph.py = map_to_graph(self.env) # Graph of the environment as tuple (nodes, edges) - as computed in src.algo.graph.env_graph.py.py
         '''
         for a in range(self.env.get_num_agents()):
             self.overlapping_spans.update({a: []})
@@ -211,12 +211,12 @@ class GraphObsForRailEnv(ObservationBuilder):
         return agent_obs
     
 
-    # TODO Stop when shortest_path() says that rail is disrupted 
+    # TODO Stop when shortest_path.py() says that rail is disrupted 
     def _get_shortest_path_action(self, handle):
         """
         Takes an agent handle and returns next action for that agent following shortest path:
         - if agent status == READY_TO_DEPART => agent moves forward;
-        - if agent status == ACTIVE => pick action using shortest_path() fun available in prediction utils;
+        - if agent status == ACTIVE => pick action using shortest_path.py() fun available in prediction utils;
         - if agent status == DONE => agent does nothing.
         :param handle: 
         :return: 
@@ -638,9 +638,13 @@ class GraphObsForRailEnv(ObservationBuilder):
         '''
         agent1 = self.env.agents[handle1]
         agent2 = self.env.agents[handle2]
+        virtual_position1 = agent1.initial_position if agent1.status == RailAgentStatus.READY_TO_DEPART else agent1.position
+        virtual_position2 = agent2.initial_position if agent2.status == RailAgentStatus.READY_TO_DEPART else agent2.position
         
-        # if agent1.status == RailAgentStatus.ACTIVE and agent2.status == RailAgentStatus.ACTIVE:
-        if agent1.initial_position == agent2.initial_position and agent1.initial_direction == agent2.initial_direction and agent1.target == agent2.target:
+        if agent1.initial_position == agent2.initial_position \
+                and agent1.initial_direction == agent2.initial_direction \
+                and agent1.target == agent2.target \
+                and (abs(virtual_position1[0] - virtual_position2[0]) <= 2 or abs(virtual_position1[1] - virtual_position2[1]) <= 2):
                 return True
         else:
             return False
