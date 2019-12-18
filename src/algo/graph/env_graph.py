@@ -23,7 +23,7 @@ class EnvGraph():
 
 	def __init__(self, env, strategy):
 		self.env = env
-		self.strategy = strategy # TODO 
+		self.strategy = strategy
 		self.cell_to_id_node = {} # Map cell position : id_node
 		self.id_node_to_cell = {} # Map id_node to cell position
 		self.connections = {} # Map id_node : connections(node)
@@ -156,14 +156,7 @@ class EnvGraph():
 		:return: 
 		"""
 		return int((direction + 2) % 4)
-
-	#ogni treno ha un suo id, una posizione definita da
-	# - un binario (un arco)
-	# - una direzione di attraversamento (0,1)
-	# - la distanza percorsa sul binario (int)
-	# una velocita
-	# una destinazione (id del nodo)
-	# altre info
+	
 
 	def _train_on_graph(self, handle, nodes, edges):
 		"""
@@ -200,6 +193,8 @@ class EnvGraph():
 				break
 		
 		speed = agent.speed_data['speed']
+		initial_position = agent.initial_position
+		initial_direction = agent.initial_direction
 		
 		# Possible cps to enter target node depend on connections available
 		target_connections = self.connections[id_target_node]

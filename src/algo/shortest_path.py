@@ -75,31 +75,39 @@ def insert_wrt_time(a, frontier, visited):
             tail.append(((x,xc), xlength, xtime, xpath))  #put back in tail
         new_frontier.append(((t,ct),length,tim,path))
         new_frontier = new_frontier + tail
-        return new_frontier    
+        return new_frontier
+
 
 def find_shortest_paths(G, train, available_at, info, connections):
-    #print(available_at)
-    #available_at is a map associating to each rail the timestep
-    #at which it will be available. We keep the invariant that if a
-    #rail is available at time t0, it will be available at any time
-    #t > t0 (with the current scheduling)
-    #The greedy policy books, for each train, ALL rails along its path,
-    #until its transit on the rail
-    
+
+    # available_at is a map associating to each rail the timestep
+    # at which it will be available and the current traversal direction.
+    # We keep the invariant that if a
+    # rail is available at time t0, it will be available at any time
+    # t > t0 (with the current scheduling)
+    # The greedy policy books, for each train, ALL rails along its path,
+    # until its transit on the rail
+
     V, E = G
     shortest_paths = []
     id_train, pos, target, speed = train
-    for cp in target[1]: # Build a shortest path for each possible entry point of the target node
-        #print("train id: {}".format(id_train))
+    for cp in target[1]:  # Build a shortest path for each possible entry point of the target node
+        # print("train id: {}".format(id_train))
         rail, direction, dist = pos
         (s, cs), (t, ct), l = info[rail]
-        
-        current_length = l-dist
-        current_time = int(current_length/speed) + available_at[rail]
+
+        rail_exit_time, rail_dir = available_at[rail]
+        # if the train already on a rail, the two directions must coincide
+        assert (direction == rail_dir)
+
+        current_length = l - dist
+        # current_time = int(current_length/speed) + available_at[rail]
+        # rail_exit_time is the maximum exit time of all trains currently on the rail
+        current_time = rail_exit_time
         current_path = [(
-            rail, #id del binario
-            direction, #direzione di percorrenza
-            current_time, #at exit time the rail will be availbale again
+            rail,  # id del binario
+            direction,  # direzione di percorrenza
+            current_time,  # at exit time the rail will be availbale again
         )]
         visited = []
         frontier = []
@@ -107,103 +115,63 @@ def find_shortest_paths(G, train, available_at, info, connections):
             current_node, current_c = t, ct
         else:
             current_node, current_c = s, cs
-       
-        #invariante: mantengo la frontier ordinata rispetto alle lunghezze correnti 
-        #todo = [n for n in V if not(n==target_node)]
-        #print("ct before while {}",current_time)
+
+        # invariante: mantengo la frontier ordinata rispetto alle lunghezze correnti
+        # todo = [n for n in V if not(n==target_node)]
+        # print("ct before while {}",current_time)
         while not (current_node, current_c) == (target[0], cp):
-            #print(frontier)
-            #time.sleep(1)
-            visited.append((current_node,current_c))
-            #cerco i binari adiacenti al current_node
+            # print(frontier)
+            # time.sleep(1)
+            visited.append((current_node, current_c))
+            # cerco i binari adiacenti al current_node
             for e in E:
-                (s,cs),(t,ct),l = info[e]
+                (s, cs), (t, ct), l = info[e]
                 if ((s == current_node and connections[current_node][current_c, cs] == 1) or
-                    (t == current_node and connections[current_node][current_c, ct] == 1)):
-                    new_length = current_length + l
-                    new_path = list(current_path)
-                    #if we want to use this rail, we need to wait until it is available
-                    new_current_time = max(current_time, available_at[e])
-                    transit_time = new_current_time +int(l/speed)
+                        (t == current_node and connections[current_node][current_c, ct] == 1)):
                     if s == current_node:
-                        #print("right {}".format(e))
-                        new_path.append((e, 1, transit_time))  #direction = 1 !!
-                        #aggiungo alla frontiera la tuple ((t,ct),s_lenght,new_path) se non e' gia'
-                        #stata visitata
-                        #print(frontier)
-                        #frontier = insert(((t,ct),newlenght,transit_time,new_path),frontier,visited)
-                        frontier = insert_wrt_time(((t,ct),new_length,transit_time,new_path),frontier,visited)
-                        #print(frontier)
-                    else: #t == current_node
-                        #print("left {}".format(e))
-                        new_path.append((e, 0, transit_time))  #direction = 0 !!
-                        #frontier = insert(((s,cs),newlenght,transit_time,new_path),frontier,visited)
-                        frontier = insert_wrt_time(((s,cs), new_length, transit_time, new_path), frontier, visited)
+                        train_dir = 1
+                        d, cd = t, ct  # destination is target                      
+                    else:
+                        train_dir = 0
+                        d, cd = s, cs  # destination is source      
+                    new_length = current_length + l
+                    new_path = list(current_path)  # make a copy of the current path
+                    rail_exit_time, rail_dir = available_at[e]
+                    # if we want to use this rail, we need to wait until it is available;
+                    # the exit time depend from the "current" rail direction
+                    if train_dir == rail_dir:
+                        # time at which I could reac the exit
+                        potential_transit_time = new_current_time + int(l / speed)
+                        # we keep the maximum between the potential_tyransit_time and
+                        # the current trial exit time +1, in case we need to follow a line
+                        transit_time = max(potential_transit_time, rail_exit_time + 1)
+                        # destination and its connection
+                    else:
+                        # wait until available in my direction
+                        new_current_time = max(current_time, rail_exit_time)
+                        transit_time = new_current_time + int(l / speed)
+                    new_path.append((e, dir, transit_time))
+                    insert_wrt_time(((d, cd), new_length, transit_time, new_path), frontier, visited)
             if not frontier:
                 # print("No path found")
-                current_path = [] #empty path means failure
+                current_path = []  # empty path means failure
                 break
             else:
                 (current_node, current_c), current_length, current_time, current_path = frontier[0]
-                #print("current from frontier = {}", current_time)
+                # print("current from frontier = {}", current_time)
                 frontier = frontier[1:]
-    
+
         shortest_paths.append((current_length, current_path))
-    # return current_length, current_path
+        
+    # Return path with minimum length
     index = 0
     min_length = shortest_paths[0][0]
     for i in range(1, len(shortest_paths)):
         if shortest_paths[i][0] < min_length:
             min_length = shortest_paths[i][0]
             index = i
-    
+
     return shortest_paths[index]
-
-
-#esempio
-'''
-EO = np.zeros((4,4))
-EO[1,3]=EO[3,1]=1
-
-NSO = np.zeros((4,4))
-NSO[0,3]=NSO[3,0]=NSO[2,3]=NSO[3,2]=1
-
-NES = np.zeros((4,4))
-NES[0,1]=NES[1,0]=NES[1,2]=NES[2,1]=1
-
-
-V = [0,1,2,3]
-
-def connection(n):
-    if n == 0:
-        return EO
-    elif n== 1:
-        return NSO
-    elif n==2:
-        return NES
-    elif n==3:
-        c = np.zeros((4,4))
-        c[3,0]=c[0,3]=c[1,3]=c[3,1]=1
-        return(c)
-
-E = [0,1,2,3,4]
-
-def info(e):
-    if e == 0: return ((0,1),(1,3),5)
-    elif e == 1:
-        return ((1,0),(2,0),3)
-    elif e == 2:
-        return ((1,2),(2,2),4)
-    elif e == 3:
-        return ((2,1),(3,3),1)
-    elif e == 4:
-        return ((0,0),(3,0),8) # c'è un errore qua, il nodo 0 non ha connessione a nord TODO
-'''
-# no_trails = len(E)
-# available_at = np.zeros(no_trails,dtype=int)
-
-
-#lenght,path = find_shortest_paths((V,E),train,available_at)
 
 def update_availability(available_at, path):
     """
@@ -212,13 +180,10 @@ def update_availability(available_at, path):
     :param path: 
     :return: 
     """
-    for (id_edge, direction, transit_time) in path[1]:
-        available_at[id_edge] = transit_time
+    for (id_edge, crossing_dir, transit_time) in path[1]:
+        available_at[id_edge] = (transit_time, crossing_dir)
+        
     return available_at
-
-#available_at = update_availability(available_at,path)
-#print(available_at)
-
 
 def scheduling(G, trains, info, connections):
     """
@@ -231,7 +196,18 @@ def scheduling(G, trains, info, connections):
     """
     paths = []
     num_rails = len(G[1]) # G[0] = vertices, G[1] = edges
-    available_at = np.zeros(num_rails, dtype=int)
+    available_at = np.zeros((num_rails, 2), dtype=int) # Contains num_rails tuples of 2 elements (transit_time, crossing_dir)
+    # Initialize available_at considering initial positions of trains
+    for t in trains:
+        id_edge = t[1][0]
+        crossing_dir = t[1][1]
+        dist = t[1][2]
+        speed = t[3]
+        # Compute total edge length to know how much time left till exit
+         edge_length = # TODO 
+        exit_time = edge_length -  dist / speed 
+        available_at[id_edge] = (exit_time, crossing_dir)
+    
     # TODO Agents order matters
     for train in trains:
         path = find_shortest_paths(G, train, available_at, info, connections)
@@ -253,7 +229,3 @@ train2 = (1, #id del treno
          .25 #speed
          )
 '''
-#paths, available_at = scheduling((V,E),[train2,train])
-
-#print(paths)
-#print(available_at)

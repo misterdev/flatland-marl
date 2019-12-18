@@ -73,10 +73,14 @@ def main(args):
 
 	env_graph = EnvGraph(env, "strategy")  # TODO Strategy is just a placeholder now
 	env_graph.map_to_graph()
+	print("Connections: {}".format(env_graph.connections))
+	print('Info: {}'.format(env_graph.info))
+	print('Trains: {}'.format(env_graph.trains))
 	
+	      
 	railenv_action_dict = {}
 	
-	for step in range(100):
+	for step in range(10):
 		for a in range(env.get_num_agents()):
 			action = np.random.choice(np.arange(5))
 			railenv_action_dict.update({a: action})
