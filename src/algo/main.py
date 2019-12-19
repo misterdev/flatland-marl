@@ -13,7 +13,7 @@ base_dir = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(base_dir))
 
 from flatland.envs.rail_env import RailEnv
-from flatland.envs.rail_generators import sparse_rail_generator, complex_rail_generator
+from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
 from flatland.envs.malfunction_generators import malfunction_from_params
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
@@ -87,36 +87,40 @@ def main(args):
 		state, reward, done, info = env.step(railenv_action_dict)  # Env step
 		env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
 
-		paths, available_at = env_graph.run_shortest_path()
+		env_graph.to_rails(observation_builder.cells_sequence[7])
+		if step == 1:
+			paths, available_at = env_graph.run_shortest_path()
+
+				
+			for a in range(env.get_num_agents()):
+				print("Agent {}".format(a))
+				print("Path: {}".format(paths[a]))
+				
+			print("Available at: {}".format(available_at))
 			
-		for a in range(env.get_num_agents()):
-			print("Agent {}".format(a))
-			print("Path: {}".format(paths[a]))
-			
-		print("Available at: {}".format(available_at))
+			print("############################################")
 		
-		print("############################################")
 
 if __name__ == '__main__':
 	
 	parser = argparse.ArgumentParser(description='Algo')
 	# Env parameters
 	parser.add_argument('--network-action-space', type=int, default=2, help='Number of actions allowed in the environment')
-	parser.add_argument('--width', type=int, default=20, help='Environment width')
-	parser.add_argument('--height', type=int, default=20, help='Environment height')
-	parser.add_argument('--num-agents', type=int, default=4, help='Number of agents in the environment')
+	parser.add_argument('--width', type=int, default=100, help='Environment width')
+	parser.add_argument('--height', type=int, default=100, help='Environment height')
+	parser.add_argument('--num-agents', type=int, default=50, help='Number of agents in the environment')
 	parser.add_argument('--max-num-cities', type=int, default=3, help='Maximum number of cities where agents can start or end')
 	parser.add_argument('--seed', type=int, default=1, help='Seed used to generate grid environment randomly')
 	parser.add_argument('--grid-mode', type=bool, default=True, help='Type of city distribution, if False cities are randomly placed')
-	parser.add_argument('--max-rails-between-cities', type=int, default=2, help='Max number of tracks allowed between cities, these count as entry points to a city')
-	parser.add_argument('--max-rails-in-city', type=int, default=3, help='Max number of parallel tracks within a city allowed')
+	parser.add_argument('--max-rails-between-cities', type=int, default=4, help='Max number of tracks allowed between cities, these count as entry points to a city')
+	parser.add_argument('--max-rails-in-city', type=int, default=5, help='Max number of parallel tracks within a city allowed')
 	parser.add_argument('--malfunction-rate', type=int, default=2000, help='Rate of malfunction occurrence of single agent')
 	parser.add_argument('--min-duration', type=int, default=0, help='Min duration of malfunction')
 	parser.add_argument('--max-duration', type=int, default=0, help='Max duration of malfunction')
 	parser.add_argument('--observation-builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
 	parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
 	parser.add_argument('--bfs-depth', type=int, default=4, help='BFS depth of the graph observation')
-	parser.add_argument('--prediction-depth', type=int, default=40, help='Prediction depth for shortest path strategy, i.e. length of a path')
+	parser.add_argument('--prediction-depth', type=int, default=1000, help='Prediction depth for shortest path strategy, i.e. length of a path')
 	
 	args = parser.parse_args()
 	main(args)

@@ -1,7 +1,7 @@
 import numpy as np
 from typing import NamedTuple
 from flatland.core.grid.grid4_utils import get_new_position, get_direction, direction_to_point
-from src.algo.shortest_path import scheduling
+from src.algo.shortest_path import scheduling, prio_scheduling
 
 CardinalNode = \
 	NamedTuple('CardinalNode', [('id_node', int), ('cardinal_point', int)])
@@ -144,6 +144,10 @@ class EnvGraph():
 		for a in self.env.get_num_agents():
 			trains.append(self._train_on_graph(a, nodes, edges))
 		'''
+		
+		
+		# Check if cell belongs to edge
+		
 		self.nodes = nodes
 		self.edges = edges
 		
@@ -212,6 +216,29 @@ class EnvGraph():
 		
 		:return: 
 		"""
-		paths, available_at = scheduling((self.nodes, self.edges), self.trains, self.info, self.connections)
+		# paths, available_at = scheduling((self.nodes, self.edges), self.trains, self.info, self.connections)
+		paths, available_at =  prio_scheduling((self.nodes, self.edges), self.trains, self.info, self.connections)
 		return paths, available_at
 
+	
+	def get_edge_from_cell(self, cell):
+		
+		for edge in self.id_edge_to_cells.keys():
+			if cell in [cell[0] for cell in self.id_edge_to_cells[edge]]:
+				return edge
+			
+		return -1 # Node
+	
+	def to_rails(self, cells):
+		
+		rails = []
+		last_rail = -1
+		for cell in cells:
+			rail = self.get_edge_from_cell(cell)
+			if rail != last_rail and rail != -1:
+				rails.append(rail)
+			last_rail = rail
+		
+		return rails
+			
+		
