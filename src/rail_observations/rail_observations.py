@@ -20,12 +20,25 @@ Could be useful to have a limited number of agents contemporary active to contro
 - Now the prediction computes the path as if agents never stopped.
 - How to consider a switch: part of a rail, include it in the bitmap or not, etc. now there are rails connecting two switches 
 - The path to draw the bitmap must be recomputed at every ts? so maybe prediction depth so high is inefficient and also not necessary
+
+Current implementation:
+- Truncating the prediction at the point where target is reached (all 0s in the bitmap after target)
+- Prediction considers if the agent is currently moving or not (all 1s/-1s on a row of the bitmap if stopped)
 """
 
 class RailObsForRailEnv(ObservationBuilder):
 	"""
 	This class returns an observation of rails occupancy in time in a bitmap.
-	# TODO Draw the bitmap
+
+			--- timesteps --->
+	rail 0: 1 1 1       -1-1
+	rail 1:      1 1
+	rail 2:         -1-1
+	.
+	.
+	rail n:
+	
+	where rails are edges and 1/-1 indicates the traversal direction on the rail.
 	"""
 
 	def __init__(self, predictor):
@@ -65,7 +78,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		
 	def get(self, handle: int = 0) -> np.ndarray:
 		"""
-		Currently this implementation of bitmap has got 'holes' of zeros when agent lies on a switch. TODO
+		Currently this implementation of bitmap has 'holes' of zeros when agent lies on a switch. TODO
 		:param handle: 
 		:return: Bitmap of rail obs for agent handle.
 		"""
@@ -73,24 +86,24 @@ class RailObsForRailEnv(ObservationBuilder):
 		rail_obs = np.zeros((self.num_rails, self.max_time_steps + 1), dtype=int) # Max steps in the future + current ts
 		agent = self.env.agents[handle]
 		path = self.cells_sequence[handle]
-		# Truncate path in the future, after reaching target TODO Think
+		# Truncate path in the future, after reaching target
 		target_index = [i for i, pos in enumerate(path) if pos[0] == agent.target[0] and pos[1] == agent.target[1]]
 		if len(target_index) != 0:
 			target_index = target_index[0]
 			path = path[:target_index+1]
 		
-		for ts in range(self.max_time_steps + 1):
-			# Fill rail occupancy according to predicted position at ts
-			for cell in path:
-				# Find rail associated to cell
-				rail, dist = self.get_edge_from_cell(cell)
-				# Find crossing direction
-				if rail != -1: # Means agent is not on a switch
-					direction = self.id_edge_to_cells[rail][dist][1]
-					crossing_dir = 1 if direction == agent.direction else -1 # Direction saved is considered as crossing_dir = 1
-					
-					rail_obs[rail, ts] = crossing_dir
-		
+		# Fill rail occupancy according to predicted position at ts
+		for ts in range(len(path)):
+			cell = path[ts]
+			# Find rail associated to cell
+			rail, dist = self.get_edge_from_cell(cell)
+			# Find crossing direction
+			if rail != -1: # Means agent is not on a switch
+				direction = self.id_edge_to_cells[rail][dist][1]
+				crossing_dir = 1 if direction == agent.direction else -1 # Direction saved is considered as crossing_dir = 1
+				
+				rail_obs[rail, ts] = crossing_dir
+	
 		return rail_obs
 		
 		
@@ -108,16 +121,16 @@ class RailObsForRailEnv(ObservationBuilder):
 			observations[a] = self.get(a)
 		return observations
 	
-	# Slightly modified wrt to the other TODO Complete definition of rails
+	# Slightly modified wrt to the other
 	def _map_to_graph(self):
 		"""
-
+		Build the representation of the map as a graph.
 		:return: 
 		"""
 		id_node_counter = 0
 		# targets = [agent.target for agent in self.env.agents]
 
-		# Identify cells hat are nodes (have switches)
+		# Identify cells hat are nodes (switches or diamond crossings)
 		for i in range(self.env.height):
 			for j in range(self.env.width):
 
@@ -218,11 +231,12 @@ class RailObsForRailEnv(ObservationBuilder):
 		:return: A tuple (id rail, dist) where dist is the distance as offset from the beginning of the rail.
 		"""
 
-		dist = 0
 		for edge in self.id_edge_to_cells.keys():
-			if cell in [cell[0] for cell in self.id_edge_to_cells[edge]]:
-				return edge, dist
-			dist += 1
+			cells = [cell[0] for cell in self.id_edge_to_cells[edge]] 
+			dist = 0
+			if cell in cells:
+				return edge, cells.index(cell)
+				dist += 1
 
 		return -1, -1  # Node
 

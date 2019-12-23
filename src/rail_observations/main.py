@@ -21,6 +21,7 @@ from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 from src.rail_observations.rail_observations import RailObsForRailEnv
 from src.rail_observations.predictions import ShortestPathPredictorForRailEnv
 
+import numpy as np
 
 def main(args):
 	rail_generator = sparse_rail_generator(max_num_cities=args.max_num_cities,
@@ -38,14 +39,8 @@ def main(args):
 
 	schedule_generator = sparse_schedule_generator(speed_ration_map)
 
-	stochastic_data = {'malfunction_rate': 1000,  # Rate of malfunction occurrence
-	                   'min_duration': 3,  # Minimal duration of malfunction
-	                   'max_duration': 20  # Max duration of malfunction
-	                   }
-
 	observation_builder = RailObsForRailEnv(predictor=ShortestPathPredictorForRailEnv(max_depth=args.prediction_depth))
 
-	# Construct the environment with the given observation, generators, predictors, and stochastic data
 	env = RailEnv(width=args.width,
 	              height=args.height,
 	              rail_generator=rail_generator,
@@ -53,7 +48,12 @@ def main(args):
 	              schedule_generator=schedule_generator,
 	              number_of_agents=args.num_agents,
 	              obs_builder_object=observation_builder,
-	              malfunction_generator_and_process_data=malfunction_from_params(stochastic_data)
+	              malfunction_generator_and_process_data=malfunction_from_params(
+		              parameters={
+			              'malfunction_rate': args.malfunction_rate,
+			              'min_duration': args.min_duration,
+			              'max_duration': args.max_duration
+		              })
 	              )
 
 	env.reset()
@@ -73,8 +73,15 @@ def main(args):
 		for a in range(env.get_num_agents()):
 			action = np.random.choice(np.arange(5))
 			railenv_action_dict.update({a: action})
+			
 		state, reward, done, info = env.step(railenv_action_dict)  # Env step
 		env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
+		
+		for a in range(env.get_num_agents()):
+			if args.debug:
+				print('########################')
+				print('Info for agent {}'.format(a))
+				print("Obs: {}".format(state[a]))
 		
 
 if __name__ == '__main__':
@@ -84,7 +91,7 @@ if __name__ == '__main__':
 	                    help='Number of actions allowed in the environment')
 	parser.add_argument('--width', type=int, default=20, help='Environment width')
 	parser.add_argument('--height', type=int, default=20, help='Environment height')
-	parser.add_argument('--num-agents', type=int, default=10, help='Number of agents in the environment')
+	parser.add_argument('--num-agents', type=int, default=4, help='Number of agents in the environment')
 	parser.add_argument('--max-num-cities', type=int, default=3,
 	                    help='Maximum number of cities where agents can start or end')
 	parser.add_argument('--seed', type=int, default=1, help='Seed used to generate grid environment randomly')
@@ -105,6 +112,8 @@ if __name__ == '__main__':
 	parser.add_argument('--bfs-depth', type=int, default=4, help='BFS depth of the graph observation')
 	parser.add_argument('--prediction-depth', type=int, default=500,
 	                    help='Prediction depth for shortest path strategy, i.e. length of a path')
-
+	
+	parser.add_argument('--debug', action='store_true', help='Print debug info.')
+	parser.add_argument('--render', action='store_true', help='Render map.')
 	args = parser.parse_args()
 	main(args)
