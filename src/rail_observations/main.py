@@ -21,7 +21,9 @@ from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 from src.rail_observations.rail_observations import RailObsForRailEnv
 from src.rail_observations.predictions import ShortestPathPredictorForRailEnv
 
-import numpy as np
+from src.rail_observations.preprocessing import fill_padding
+from src.rail_observations.agent import DQNAgent
+
 
 def main(args):
 	rail_generator = sparse_rail_generator(max_num_cities=args.max_num_cities,
@@ -56,7 +58,6 @@ def main(args):
 		              })
 	              )
 
-	env.reset()
 
 	env_renderer = RenderTool(
 		env,
@@ -65,25 +66,39 @@ def main(args):
 		screen_height=1080,
 		screen_width=1920)
 
-	env_renderer.reset()
-
+	max_rails = 100 # TODO Must be a parameter of the env (estimated)
+	max_steps = env.compute_max_episode_steps(env.width, env.height)
+	dqn = DQNAgent(args, action_space=5, height=max_rails)
 	railenv_action_dict = {}
-
-	for step in range(10):
-		for a in range(env.get_num_agents()):
-			action = np.random.choice(np.arange(5))
-			railenv_action_dict.update({a: action})
+	# TODO Rollout and training
+	############ Main loop
+	for ep in range(args.num_episodes):
+		
+		state, info = env.reset()
+		env_renderer.reset()
+		
+		for step in range(max_steps):
 			
-		state, reward, done, info = env.step(railenv_action_dict)  # Env step
-		env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
+			action = dqn.act(state)
+			railenv_action_dict.update({a: action})
+				
+			state, reward, done, info = env.step(railenv_action_dict)  # Env step
+			env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
+			
+			for a in range(env.get_num_agents()):	
+				if args.debug:
+					print('########################')
+					print('Info for agent {}'.format(a))
+					print("Obs: {}".format(state[a]))
+			
+			# Preprocess observations
+			next_state = None
+			for a in range(env.get_num_agents()):
+				padded_obs = fill_padding(state[a], max_rails)
+				# Concatenate along the rail axis -> result shape is (num_agents * num_rails, max_steps)
+				next_state = padded_obs if next_state == None else np.concatenate(next_state, padded_obs)
+			state = next_state
 		
-		for a in range(env.get_num_agents()):
-			if args.debug:
-				print('########################')
-				print('Info for agent {}'.format(a))
-				print("Obs: {}".format(state[a]))
-		
-
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Algo')
 	# Env parameters
@@ -113,7 +128,8 @@ if __name__ == '__main__':
 	parser.add_argument('--prediction-depth', type=int, default=500,
 	                    help='Prediction depth for shortest path strategy, i.e. length of a path')
 	
-	parser.add_argument('--debug', action='store_true', help='Print debug info.')
-	parser.add_argument('--render', action='store_true', help='Render map.')
+	parser.add_argument('--num_episodes', type=int, default=15000, help="Number of episodes to run")
+	parser.add_argument('--debug', action='store_true', help='Print debug info')
+	parser.add_argument('--render', action='store_true', help='Render map')
 	args = parser.parse_args()
 	main(args)

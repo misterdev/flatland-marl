@@ -15,15 +15,17 @@ CardinalNode = \
 
 """
 Things to figure out:
-- the observation acts considering that ALL agents start at once at the beginning, so at ts=0 they already have a position on the grid 
+- The observation acts considering that ALL agents start at once at the beginning, so at ts=0 they already have a position on the grid 
 Could be useful to have a limited number of agents contemporary active to control the number of bitmaps to feed to the network.
-- Now the prediction computes the path as if agents never stopped.
 - How to consider a switch: part of a rail, include it in the bitmap or not, etc. now there are rails connecting two switches 
-- The path to draw the bitmap must be recomputed at every ts? so maybe prediction depth so high is inefficient and also not necessary
+ but they have length = 0 so switches are not considered in the bitmap.
+- The path to draw the bitmap must be recomputed at every ts, so maybe prediction depth so high (2000) is inefficient and unnecessary
+- TODO How to return the actions (for all the agents at once?)
 
 Current implementation:
 - Truncating the prediction at the point where target is reached (all 0s in the bitmap after target)
-- Prediction considers if the agent is currently moving or not (all 1s/-1s on a row of the bitmap if stopped)
+- Prediction now doesn't consider if the agent is currently moving or not (so the bitmap still show all the path even though the agent is stopped)
+If it did, then we would have a row of 1/-1 in the bitmap. Both choices give wrong info about future moves.
 """
 
 class RailObsForRailEnv(ObservationBuilder):
