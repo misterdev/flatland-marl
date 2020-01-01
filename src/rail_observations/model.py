@@ -11,7 +11,7 @@ def dim_output(input_dim, filter_dim, stride_dim):
     return (input_dim - filter_dim) // stride_dim + 1
 
 class Dueling_DQN(nn.Module):
-    def __init__(self, width, height, num_agents, action_space):
+    def __init__(self, width, height, action_space):
         super(Dueling_DQN, self).__init__()
         self.action_space = action_space
         # input shape (batch_size, in_channels = height/num_rails, width/prediction_depth + 1) 

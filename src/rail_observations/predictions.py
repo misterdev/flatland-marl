@@ -42,6 +42,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
     """
 
     def __init__(self, max_depth: int = 20):
+        self.shortest_paths = None
         super().__init__(max_depth)
 
     def get(self, handle: int = None):
@@ -71,8 +72,8 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         if handle:
             agents = [self.env.agents[handle]]
         distance_map: DistanceMap = self.env.distance_map
-
-        shortest_paths = get_shortest_paths(distance_map, max_depth=self.max_depth + 1)
+        # Use map_depth + 1 to consider current time step 
+        self.shortest_paths = shortest_paths = get_shortest_paths(distance_map, max_depth=self.max_depth + 1)
         
         prediction_dict = {}
         for agent in agents:
@@ -94,7 +95,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             agent_speed = agent.speed_data["speed"]
             times_per_cell = int(np.reciprocal(agent_speed))
             prediction = np.zeros(shape=(self.max_depth + 1, 5))
-            # First cell is info relative to actual timestep
+            # First cell is info relative to actual time step
             prediction[0] = [0, *agent_virtual_position, agent_virtual_direction, 0]
 
             shortest_path = shortest_paths[agent.handle]
@@ -139,7 +140,6 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         :param prediction_dict: 
         :return: 
         """
-        
 
         cells_sequence = defaultdict(list)
         agents = self.env.agents
@@ -156,3 +156,39 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         :return: 
         """
         return self.max_depth
+
+    def get_shortest_path_action(self, handle):
+        """
+        Takes an agent handle and returns next action for that agent following shortest path:
+        - if agent status == READY_TO_DEPART => agent moves forward;
+        - if agent status == ACTIVE => pick action according to shortest path;
+        - if agent status == DONE => agent does nothing.
+        :param handle: 
+        :return: 
+        """
+
+        agent = self.env.agents[handle]
+
+        if agent.status == RailAgentStatus.READY_TO_DEPART:
+            action = RailEnvActions.MOVE_FORWARD
+
+        elif agent.status == RailAgentStatus.ACTIVE:
+            # This can return None when rails are disconnected or there was an error in the DistanceMap
+            if self.shortest_paths[handle] is None:  # Railway disrupted
+                action = RailEnvActions.STOP_MOVING
+            else:
+                step = self.shortest_paths[handle][0]
+                next_action_element = step[2][0]  # Get next_action_element
+
+                # Just to use the correct form/name
+                if next_action_element == 1:
+                    action = RailEnvActions.MOVE_LEFT
+                elif next_action_element == 2:
+                    action = RailEnvActions.MOVE_FORWARD
+                elif next_action_element == 3:
+                    action = RailEnvActions.MOVE_RIGHT
+
+        else:  # If status == DONE
+            action = RailEnvActions.DO_NOTHING
+
+        return action

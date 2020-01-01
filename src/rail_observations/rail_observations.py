@@ -26,6 +26,7 @@ Current implementation:
 - Truncating the prediction at the point where target is reached (all 0s in the bitmap after target)
 - Prediction now doesn't consider if the agent is currently moving or not (so the bitmap still show all the path even though the agent is stopped)
 If it did, then we would have a row of 1/-1 in the bitmap. Both choices give wrong info about future moves.
+- Agents that are not departed yet see anyway all their path to the target on the bitmap.
 """
 
 class RailObsForRailEnv(ObservationBuilder):
@@ -63,8 +64,16 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.id_edge_to_cells = {} # Map id_edge : list of tuples (cell pos, crossing dir) in rail (nodes are not counted)
 		self.nodes = set() # Set of node ids
 		self.edges = set() # Set of edge ids
+		
+		self.bitmaps = None
+		self.recompute_bitmap = True
 
 	def set_env(self, env: Environment):
+		"""
+	
+		:param env: 
+		:return: 
+		"""
 		super().set_env(env)
 		if self.predictor:
 			# Use set_env available in PredictionBuilder (parent class)
@@ -76,6 +85,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		:return: 
 		"""
 		self._map_to_graph() # Fill member variables
+		self.recompute_bitmap = True
 		
 		
 	def get(self, handle: int = 0) -> np.ndarray:
@@ -118,11 +128,106 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.prediction_dict = self.predictor.get()
 		self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
 		
+		# Compute initial bitmaps from shortest path
+		if self.recompute_bitmap:
+			self.bitmaps = self._get_many_bitmap(handles=[a for a in range(self.env.get_num_agents())])
+			self.recompute_bitmap = False
+		
 		observations = {}
 		for a in handles:
 			observations[a] = self.get(a)
+			
 		return observations
 	
+	def get_initial_bitmaps(self):
+		"""
+		Getter for initial bitmaps.
+		:return: 
+		"""
+		return self.bitmaps
+	
+	# Dubbio: l'azione di entrare nella mappa non dura time steps, è immediata? O no?
+	# Se sì qua c'è uno sfasamento
+	def _get_bitmap(self, handle: int = 0) -> np.ndarray:
+		"""
+		Compute initial bitmap for agent handle, given a selected path.
+		:param handle: 
+		:return: 
+		"""
+		bitmap = np.zeros((self.num_rails, self.max_time_steps + 1), dtype=int)  # Max steps in the future + current ts
+		agent = self.env.agents[handle]
+		path = self.cells_sequence[handle]
+		# Truncate path in the future, after reaching target
+		target_index = [i for i, pos in enumerate(path) if pos[0] == agent.target[0] and pos[1] == agent.target[1]]
+		if len(target_index) != 0:
+			target_index = target_index[0]
+			path = path[:target_index + 1]
+		
+		# Add 0 at first ts - for 'not departed yet'
+		rail, _ = self.get_edge_from_cell(path[0])
+		bitmap[rail, 0] = 0 # TODO così mi perdo il target? forse devo avere target + 2?
+		
+		# Fill rail occupancy according to predicted position at ts
+		for ts in range(1, len(path)):
+			cell = path[ts] 
+			# Find rail associated to cell
+			rail, dist = self.get_edge_from_cell(cell)
+			# Find crossing direction
+			if rail != -1:  # Means agent is not on a switch
+				direction = self.id_edge_to_cells[rail][dist][1]
+				crossing_dir = 1 if direction == agent.direction else -1  # Direction saved is considered as crossing_dir = 1
+
+				bitmap[rail, ts] = crossing_dir
+		
+		return bitmap
+		
+	def _get_many_bitmap(self, handles: Optional[List[int]] = None) -> np.ndarray:
+		"""
+		This function computes the bitmaps and returns them, bitmaps are *strictly not* observations.
+		:return: 
+		"""
+		bitmaps = np.zeros((len(handles), self.num_rails, self.max_time_steps + 1), dtype=int)
+		# Stack bitmaps
+		for a in range(len(handles)):
+			bitmaps[a, :, :] = self._get_bitmap(a)
+		
+		return bitmaps
+	
+	
+	def _last_train_on_rail(self, maps, rail, handle):
+		"""
+		Find train preceding agent 'handle' on rail.
+		:param maps: 
+		:param rail: 
+		:param handle: 
+		:return: 
+		"""
+		ft, tt = 0, 0 # Final train, its expected exit time
+		
+		for a in range(self.env.get_num_agents()):
+			if not maps[a, rail, 0] == 0 and not a == handle:
+				it = np.argmax(maps[a, rail, :] == 0)
+				if it > tt: # If exit time of train a > my exit time
+					ft, tt = a, it
+		return ft, tt
+	
+	def _all_trains_on_rails(self, maps, rail, handle):
+		"""
+		
+		:param maps: 
+		:param rail: 
+		:param handle: 
+		:return: 
+		"""
+		all_trains = []
+		for a in range(self.env.get_num_agents()):
+			if not (maps[a, rail, 0] == 0 or a == handle):
+				expected_exit_time = np.argmax(maps[a, rail, :] == 0) # Takes index/ts of last bit in a row
+				all_trains.append((expected_exit_time, a))
+		all_trains.sort()
+		
+		return all_trains
+		
 	# Slightly modified wrt to the other
 	def _map_to_graph(self):
 		"""
