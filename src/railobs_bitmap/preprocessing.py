@@ -64,5 +64,7 @@ def preprocess_obs(handle, bitmaps, max_conflicting_agents, max_rails):
     # state = np.stack([fill_padding(state[a,:, :], max_rails) for a in range(max_conflicting_agents)], axis=0)
     # Or simply concatenate
     state = np.concatenate([fill_padding(state[a,:, :], max_rails) for a in range(max_conflicting_agents)], axis=0)
-
-    return state
+    # PyTorch CNN - BCHW
+    #state = np.transpose(state, (1, 0))
+    
+    return state # (prediction_depth + 1, max_cas * max_rails)

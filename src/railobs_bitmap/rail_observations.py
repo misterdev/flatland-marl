@@ -9,6 +9,8 @@ import numpy as np
 from flatland.core.env import Environment
 from flatland.core.env_observation_builder import ObservationBuilder
 from flatland.core.grid.grid4_utils import get_new_position
+from flatland.envs.rail_env import RailEnvActions
+
 
 CardinalNode = \
 	NamedTuple('CardinalNode', [('id_node', int), ('cardinal_point', int)])
@@ -96,6 +98,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		"""
 		
 		rail_obs = np.zeros((self.num_rails, self.max_time_steps + 1), dtype=int) # Max steps in the future + current ts
+		'''
 		agent = self.env.agents[handle]
 		path = self.cells_sequence[handle]
 		# Truncate path in the future, after reaching target
@@ -117,7 +120,7 @@ class RailObsForRailEnv(ObservationBuilder):
 				rail_obs[rail, ts] = crossing_dir
 	
 		return rail_obs
-		
+		'''
 		
 	def get_many(self, handles: Optional[List[int]] = None) -> Dict[int, np.ndarray]:
 		"""
@@ -146,8 +149,65 @@ class RailObsForRailEnv(ObservationBuilder):
 		"""
 		return self.bitmaps
 	
-	# Dubbio: l'azione di entrare nella mappa non dura time steps, è immediata? O no?
-	# Se sì qua c'è uno sfasamento
+	def update_bitmaps(self, a, network_action, bitmaps):
+
+		current_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
+		current_dir = bitmaps[a, current_rail, 0]
+		
+		if network_action == 1:  # Go
+			# print("Advancing")
+			action = self.predictor.get_shortest_path_action(a)  # TODO Add alternative paths
+			bitmaps[a, :, 0] = 0
+			bitmaps[a] = np.roll(bitmaps[a], -1)
+			# Find next rail and dir
+			new_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
+			new_dir = bitmaps[a, new_rail, 0]
+
+			if bitmaps[a, new_rail, 0] == 0:
+				#if args.debug:
+				print("Train {} completed".format(a))
+			else:
+				# print("Now on rail {} in direction {}".format(new_rail, new_dir))
+				# Check if rail is already occupied - to compute new exit time
+				lt, tt = self._last_train_on_rail(bitmaps, new_rail, a)
+				if tt > 0:
+					ca_dir = bitmaps[lt, new_rail, 0]
+					if not ca_dir == new_dir:
+						# print("CRASH with {}".format(lt))
+						# print("Undo move")
+						action = RailEnvActions.STOP_MOVING  # alternative ??
+						bitmaps[a] = np.roll(bitmaps[a], 1)
+						bitmaps[a, current_rail, 0] = current_dir
+					else:
+						t_time = np.argmax(bitmaps[a, new_rail, :] == 0)
+						if t_time <= tt:
+							delay = tt + int(1 / self.env.agents[a].speed_data['speed']) - t_time
+							bitmaps[a] = np.roll(bitmaps[a], delay)
+							bitmaps[a, new_rail, 0:delay] = new_dir
+						# print("Following {} with delay {}".format(lt, delay))
+						#else:
+						#	print("Following {} with no delay".format(lt))
+				#else:
+				#	print("New rail is free")
+		else:
+			# print("Waiting")
+			action = RailEnvActions.STOP_MOVING  # network_action = 0
+			if not bitmaps[a, current_rail, 0] == 0:  # If agent is active
+				others = self._all_trains_on_rails(bitmaps, current_rail, a)
+				# print("Other trains on rail {}: {}".format(current_rail, others))
+				first_time = 1
+				for other in others:
+					oe, ot = other  # Other exit, other train (id)
+					ospeed = int(1 / self.env.agents[ot].speed_data['speed'])
+					if oe < first_time + ospeed:
+						delay = first_time + ospeed - oe
+						bitmaps[ot] = np.roll(maps[ot], delay)
+						maps[ot, current_rail, 0:delay] = current_dir
+						# print("Train {} delayed of {}".format(ot, delay))
+						first_time += ospeed
+
+		return action, bitmaps
+
 	def _get_bitmap(self, handle: int = 0) -> np.ndarray:
 		"""
 		Compute initial bitmap for agent handle, given a selected path.
@@ -318,12 +378,13 @@ class RailObsForRailEnv(ObservationBuilder):
 						possible_transitions = np.array(self.env.rail.get_transitions(pos[0], pos[1], direction))
 						possible_transitions[exit_dir] = 0  # Don't consider direction from which I entered
 						# t = 2
-						t = np.argmax(
-							possible_transitions)  # There's only one possible transition except the one that I took to get in
+						t = np.argmax(possible_transitions)  # There's only one possible transition except the one that I took to get in
 						temp_pos = get_new_position(pos, t)
 						if 0 <= temp_pos[0] < self.env.height and 0 <= temp_pos[1] < self.env.width:  # Patch - check if this cell is a rail
 							# Entrance dir is always opposite to exit dir
 							direction = t
+						else:
+							break
 
 		edges = self.info.keys()
 

@@ -8,12 +8,12 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from src.rail_observations.model import Dueling_DQN
+from src.railobs_bitmap.model import Dueling_DQN
 
 # TODO add these to argparse
 # Params for ReplayBuffer class
 BUFFER_SIZE = int(1e5)  # replay buffer size, that is size of the memory keeping the experiences, 1e5
-BATCH_SIZE = 512  # minibatch size = 512
+BATCH_SIZE = 512  # minibatch size = 512 for replay buffer
 
 GAMMA = 0.99  # discount factor 0.99
 TAU = 1e-3  # for soft update of target parameters
@@ -37,7 +37,7 @@ class DQNAgent:
 		"""
 		# self.state_size = state_size # used by the network, not the algorithm
 		self.width = args.prediction_depth + 1 # Bitmap width
-		self.height = bitmap_height # Max num rails
+		self.height = bitmap_height # Max conflicting agents x max num rails
 		self.action_space = action_space
 		self.double_dqn = double_dqn
 		# Q-Network
@@ -104,25 +104,25 @@ class DQNAgent:
 			experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples
 			gamma (float): discount factor
 		"""
-		states, actions, rewards, next_states, dones = experiences
+		states, actions, rewards, next_states, dones = experiences		# batch_size experiences
 
 		# Get expected Q values from local model
-		Q_expected = self.qnetwork_local(states).gather(1, actions)
+		Q_expected = self.qnetwork_local(states).gather(1, actions.unsqueeze(-1)).view(BATCH_SIZE)
 
 		if self.double_dqn:
 			# Double DQN
-			q_best_action = self.qnetwork_local(next_states).max(1)[1]
-			Q_targets_next = self.qnetwork_target(next_states).gather(1, q_best_action.unsqueeze(-1))
+			q_best_action = self.qnetwork_local(next_states).max(1)[1] # shape (512)
+			Q_targets_next = self.qnetwork_target(next_states).gather(1, q_best_action.unsqueeze(-1)).view(BATCH_SIZE) # (512, 1)
 		else:
 			# DQN
 			Q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(-1)
 
 		# Compute Q targets for current states
 
-		Q_targets = rewards + (gamma * Q_targets_next * (1 - dones))
+		Q_targets = rewards + (gamma * Q_targets_next * (1 - dones)) # (512, 512)
 
 		# Compute loss
-		loss = F.mse_loss(Q_expected, Q_targets)
+		loss = F.mse_loss(Q_expected, Q_targets) # Fix: shape error
 		# Minimize the loss
 		self.optimizer.zero_grad()
 		loss.backward()
@@ -166,6 +166,7 @@ class ReplayBuffer:
 
 	def add(self, state, action, reward, next_state, done):
 		"""Add a new experience to memory."""
+		# expand_dims adds one dimension along axis 0 for PyTorch
 		e = self.experience(np.expand_dims(state, 0), action, reward, np.expand_dims(next_state, 0), done)
 		self.memory.append(e)
 
@@ -190,16 +191,22 @@ class ReplayBuffer:
 		"""Return the current size of internal memory."""
 		return len(self.memory)
 
-	# This same function is used for states, actions, rewards etc, so the parameter 'states' doesn't contain states alll the time
+	# This same function is used for states, actions, rewards etc, so the parameter 'states' doesn't contain states all the time
 	# and for this reason has different shapes
 	def __v_stack_impr(self, states):
-		# sub_dim = len(states[0][0]) if isinstance(states[0], Iterable) else 1
-		# means states are actually states (not actions, or rewards...)
-		if isinstance(states[0], Iterable):
-			sub_dim = len(states[0][0])
-			np_states = np.reshape(np.array(states), (len(states), sub_dim, self.width, self.height))
-		else:
-			sub_dim = 1
-			np_states = np.reshape(np.array(states), (len(states), sub_dim))
-
-		return np_states
+		"""
+		
+		:param states: a list of states (or actions/rewards/dones), len = self.batch_size
+		:return: 
+		"""
+		if isinstance(states[0], Iterable): # States, next_states
+			# Debug shapes
+			#for i in range(len(states)):
+			#	print(states[i].shape)  
+			# Could be that one of the size of the arrays in the list states is different than the others
+			np_states = np.array(states) # (512, 1, 400, 101) 
+			np_states = np.reshape(np_states, (len(states), self.height, self.width))
+		else: # Actions, rewards, dones
+			np_states = np.reshape(np.array(states), (len(states))) # (512, )
+	
+		return np_states 

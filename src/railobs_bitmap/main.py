@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 import argparse
-import os
-import pickle
 import sys
 import numpy as np
 import torch
-from tqdm import trange
-from knockknock import telegram_sender
 from pathlib import Path
+import os
 
 from collections import deque
 
@@ -20,12 +17,12 @@ from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
 from flatland.envs.malfunction_generators import malfunction_from_params
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
-from src.rail_observations.rail_observations import RailObsForRailEnv
-from src.rail_observations.predictions import ShortestPathPredictorForRailEnv
+from src.railobs_bitmap.rail_observations import RailObsForRailEnv
+from src.railobs_bitmap.predictions import ShortestPathPredictorForRailEnv
 from flatland.envs.rail_env import RailEnvActions
 
-from src.rail_observations.preprocessing import preprocess_obs
-from src.rail_observations.agent import DQNAgent
+from src.railobs_bitmap.preprocessing import preprocess_obs
+from src.railobs_bitmap.agent import DQNAgent
 
 
 def main(args):
@@ -73,12 +70,18 @@ def main(args):
 	max_rails = 100 # TODO Must be a parameter of the env (estimated)
 	max_conflicting_agents = 4 # TODO Decide subset of agents to feed
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
-	max_steps = 150
+	max_steps = 100
 	
 	dqn = DQNAgent(args, bitmap_height=max_conflicting_agents * max_rails, action_space=2)
+	
+	if args.render:
+		file = os.path.isfile("checkpoints/"+args.model_name)
+		if file:
+			dqn.qnetwork_local.load_state_dict(torch.load(file))
+			
+		
 	eps = 1.
 	eps_end = 0.005
-	
 	railenv_action_dict = {}
 	network_action_dict = {}
 	scores_window = deque(maxlen=100)
@@ -99,7 +102,7 @@ def main(args):
 		if args.render:
 			env_renderer.reset()
 		maps = observation_builder.get_initial_bitmaps()
-		#maps = observation_builder.get_bitmaps(handles=[a for a in range(env.get_num_agents())])
+
 		# TODO : For the moment I'm considering only the shortest path, and no alternative paths
 		for step in range(max_steps - 1):
 			# rem first bit is 0 for agent not departed
@@ -107,98 +110,63 @@ def main(args):
 				# If two first consecutive bits in the bitmap are the same
 				# print(maps[a, :, :])
 				if np.all(maps[a, :, 0] == maps[a, :, 1]):
-					update_values[a] = False # Network doesn't need to choose a move
-					# action = prediction_builder.get_shortest_path_action(a)
+					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
+					buffer_obs[a] = obs.copy()		
+					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
 					action = RailEnvActions.MOVE_FORWARD
 				else: # Changing rails - need to perform a move
 					update_values[a] = True
 					# Print info TODO These are wrong if step = 0 agents not departed
 					current_rail = np.argmax(np.absolute(maps[a, :, 0]))
 					current_dir = maps[a, current_rail, 0]
+					'''
 					if maps[a, current_rail, 0] == 0:  # The first el is 0 for an agent READY_TO_DEPART
-						print("Train {} ready to start".format(a))
+						if args.debug:
+							print("Train {} ready to start".format(a))
 					else:
-						print("Train {} on rail {} in direction {}".format(a, current_rail, current_dir))
+						#print("Train {} on rail {} in direction {}".format(a, current_rail, current_dir))
 						assert (maps[a, current_rail, 1] == 0)
-					
+					'''
 					# Let the network choose the action : current random_move()
 					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
 					# Save current state in buffer
 					buffer_obs[a] = obs.copy()		
-					network_action = dqn.act(obs)
-					# Add code to handle bitmap ....TODO This part could go in the observation builder
-					if network_action == 1: # Go
-						print("Advancing")
-						action = prediction_builder.get_shortest_path_action(a) # TODO Add alternative paths
-						maps[a, : , 0] = 0
-						maps[a] = np.roll(maps[a], -1)
-						# Find next rail and dir
-						new_rail = np.argmax(np.absolute(maps[a, :, 0]))
-						new_dir = maps[a, new_rail, 0]
-						
-						if maps[a, new_rail, 0] == 0:
-							print("Train {} completed".format(a))
-						else:
-							print("Now on rail {} in direction {}".format(new_rail, new_dir))
-							# Check if rail is already occupied - to compute new exit time
-							lt, tt = observation_builder._last_train_on_rail(maps, new_rail, a)
-							if tt > 0:
-								ca_dir = maps[lt, new_rail, 0]
-								if not ca_dir == new_dir:
-									print("CRASH with {}".format(lt))
-									print("Undo move")
-									maps[a] = np.roll(maps[a], 1)
-									maps[a, current_rail, 0] = current_dir
-								else:
-									t_time = np.argmax(maps[a, new_rail, :] == 0)
-									if t_time <= tt:
-										delay = tt + int(1/env.agents[a].speed_data['speed']) - t_time
-										maps[a] = np.roll(maps[a], delay)
-										maps[a, new_rail, 0:delay] = new_dir
-										print("Following {} with delay {}".format(lt, delay))
-									else:
-										print("Following {} with no delay".format(lt))
-							else:
-								print("New rail is free")
-					else:
-						print("Waiting")
-						action = RailEnvActions.STOP_MOVING
-						if not maps[a, current_rail, 0] == 0: # If agent is active
-							others = observation_builder._all_trains_on_rails(maps, current_rail, a)
-							print("Other trains on rail {}: {}".format(current_rail, others))
-							first_time = 1
-							for other in others:
-								oe, ot = other # Other exit, other train (id)
-								ospeed = int(1/env.agents[ot].speed_data['speed'])
-								if oe < first_time + ospeed:
-									delay = first_time + ospeed - oe
-									maps[ot] = np.roll(maps[ot], delay)
-									maps[ot, current_rail, 0:delay] = current_dir
-									print("Train {} delayed of {}".format(ot, delay))
-									first_time += ospeed	
-
+					network_action = dqn.act(obs) # Network chooses action
+					# Add code to handle bitmap ...
+					action, maps = observation_builder.update_bitmaps(a, network_action, maps)
+					
 				next_obs[a] = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
-				railenv_action_dict.update({a: action}) # TODO must be a railenv action
+				network_action_dict.update({a: network_action})
+				railenv_action_dict.update({a: action})
+				
 			# Obs is computed from bitmaps while state is computed from env step (temporarily)
 			_, reward, done, info = env.step(railenv_action_dict)  # Env step
 			if args.render:
 				env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
 			
-			for a in range(env.get_num_agents()):	
-				if args.debug:
-					print('########################')
+			if args.debug:
+				for a in range(env.get_num_agents()):
+					print('#########################################')
 					print('Info for agent {}'.format(a))
-					print('Status: {}'.format(env.agents[a].status))
-					# print bitmap...
-					print("Obs: {}".format(state[a]))
+					print('Status: {}'.format(info['status'][a]))
+					print('Position: {}'.format(env.agents[a].position))
+					print('Target: {}'.format(env.agents[a].target))
+					print('Moving? {} at speed: {}'.format(env.agents[a].moving, info['speed'][a]))
+					print('Action required? {}'.format(info['action_required'][a]))
+					print('Network action: {}'.format(network_action_dict[a]))
+					print('Railenv action: {}'.format(railenv_action_dict[a]))
+					#print('Q values: {}'.format(q_values[a]))
 			
 			# Update replay buffer and train agent
-			for a in range(env.get_num_agents()):
-				if update_values[a] or done[a]:
-					dqn.step(buffer_obs, network_action_dict, reward[a], next_obs[a], done[a])
-					buffer_obs[a] = next_obs[a].copy()
-					
+			if args.train:
+				for a in range(env.get_num_agents()):
+					if update_values[a] or done[a]:
+						dqn.step(buffer_obs[a], network_action_dict[a], reward[a], next_obs[a], done[a])
+						buffer_obs[a] = next_obs[a].copy()
+				
+			for a in range(env.get_num_agents()):	
 				score += reward[a] / env.get_num_agents() # Update score
+				
 			if done['__all__']:
 				env_done = 1
 				break
@@ -207,14 +175,13 @@ def main(args):
 		# Metrics
 		done_window.append(env_done)
 		num_agents_done = 0  # Num of agents that reached their target
-		for a in range(env.get_num_agents()):
+		for a in range(env.get_num_agents()): # TODO: env sets done[all] = True for everyone when time limit is reached
 			if done[a]:
 				num_agents_done += 1
 
 		scores_window.append(score / max_steps)  # Save most recent score
 		scores.append(np.mean(scores_window))
 		dones_list.append((np.mean(done_window)))
-
 
 		# Print training results info
 		print(
@@ -235,43 +202,36 @@ def main(args):
 					100 * np.mean(done_window),
 					100 * (num_agents_done / args.num_agents),
 					eps))
-			torch.save(dqn.qnetwork_local.state_dict(), './checkpoints/' + str(args.model_name) + str(ep) + '.pth')
+			if args.train:
+				torch.save(dqn.qnetwork_local.state_dict(), './checkpoints/' + str(args.model_name) + str(ep) + '.pth')
+		
 		
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description='Algo')
+	parser = argparse.ArgumentParser(description='Railobs')
 	# Env parameters
-	parser.add_argument('--network-action-space', type=int, default=2,
-	                    help='Number of actions allowed in the environment')
+	parser.add_argument('--network-action-space', type=int, default=2, help='Number of actions allowed in the environment')
 	parser.add_argument('--width', type=int, default=20, help='Environment width')
 	parser.add_argument('--height', type=int, default=20, help='Environment height')
 	parser.add_argument('--num-agents', type=int, default=4, help='Number of agents in the environment')
-	parser.add_argument('--max-num-cities', type=int, default=3,
-	                    help='Maximum number of cities where agents can start or end')
+	parser.add_argument('--max-num-cities', type=int, default=3, help='Maximum number of cities where agents can start or end')
 	parser.add_argument('--seed', type=int, default=1, help='Seed used to generate grid environment randomly')
-	parser.add_argument('--grid-mode', type=bool, default=True,
-	                    help='Type of city distribution, if False cities are randomly placed')
-	parser.add_argument('--max-rails-between-cities', type=int, default=2,
-	                    help='Max number of tracks allowed between cities, these count as entry points to a city')
-	parser.add_argument('--max-rails-in-city', type=int, default=3,
-	                    help='Max number of parallel tracks within a city allowed')
-	parser.add_argument('--malfunction-rate', type=int, default=2000,
-	                    help='Rate of malfunction occurrence of single agent')
+	parser.add_argument('--grid-mode', type=bool, default=True, help='Type of city distribution, if False cities are randomly placed')
+	parser.add_argument('--max-rails-between-cities', type=int, default=2, help='Max number of tracks allowed between cities, these count as entry points to a city')
+	parser.add_argument('--max-rails-in-city', type=int, default=3, help='Max number of parallel tracks within a city allowed')
+	parser.add_argument('--malfunction-rate', type=int, default=2000, help='Rate of malfunction occurrence of single agent')
 	parser.add_argument('--min-duration', type=int, default=0, help='Min duration of malfunction')
 	parser.add_argument('--max-duration', type=int, default=0, help='Max duration of malfunction')
-	parser.add_argument('--observation-builder', type=str, default='GraphObsForRailEnv',
-	                    help='Class to use to build observation for agent')
-	parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv',
-	                    help='Class used to predict agent paths and help observation building')
+	parser.add_argument('--observation-builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
+	parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
 	parser.add_argument('--bfs-depth', type=int, default=4, help='BFS depth of the graph observation')
-	parser.add_argument('--prediction-depth', type=int, default=500,
-	                    help='Prediction depth for shortest path strategy, i.e. length of a path')
+	parser.add_argument('--prediction-depth', type=int, default=500, help='Prediction depth for shortest path strategy, i.e. length of a path')
 	# Training
 	parser.add_argument('--model-name', type=str, default="ddqn-replay-buffer", help="Model name")
 	parser.add_argument('--num-episodes', type=int, default=15000, help="Number of episodes to run")
 	parser.add_argument('--eps-decay', type=float, default=0.998, help="Factor to decrease eps in eps-greedy")
-	
 	# Misc
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
+	parser.add_argument('--train', action='store_true', help='Perform training')
 	args = parser.parse_args()
 	main(args)
