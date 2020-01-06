@@ -114,6 +114,9 @@ def main(args):
 					buffer_obs[a] = obs.copy()		
 					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
 					action = RailEnvActions.MOVE_FORWARD
+					network_action = 1
+					maps[a, :, 0] = 0
+					maps[a] = np.roll(maps[a], -1)
 				else: # Changing rails - need to perform a move
 					update_values[a] = True
 					# Print info TODO These are wrong if step = 0 agents not departed
@@ -134,7 +137,7 @@ def main(args):
 					network_action = dqn.act(obs) # Network chooses action
 					# Add code to handle bitmap ...
 					action, maps = observation_builder.update_bitmaps(a, network_action, maps)
-					
+
 				next_obs[a] = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
 				network_action_dict.update({a: network_action})
 				railenv_action_dict.update({a: action})
