@@ -201,8 +201,8 @@ class RailObsForRailEnv(ObservationBuilder):
 					ospeed = int(1 / self.env.agents[ot].speed_data['speed'])
 					if oe < first_time + ospeed:
 						delay = first_time + ospeed - oe
-						bitmaps[ot] = np.roll(maps[ot], delay)
-						maps[ot, current_rail, 0:delay] = current_dir
+						bitmaps[ot] = np.roll(bitmaps[ot], delay)
+						bitmaps[ot, current_rail, 0:delay] = current_dir
 						# print("Train {} delayed of {}".format(ot, delay))
 						first_time += ospeed
 

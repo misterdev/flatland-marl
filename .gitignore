@@ -1,5 +1,6 @@
 __pycache__/
 .idea/
+.vscode/
 cnn_globalobs/nets/
 fc_treeobs/nets/
 bot_config.txt
