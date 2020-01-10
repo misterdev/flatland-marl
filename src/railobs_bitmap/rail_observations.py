@@ -86,9 +86,15 @@ class RailObsForRailEnv(ObservationBuilder):
 		
 		:return: 
 		"""
-		self._map_to_graph() # Fill member variables
+		self.cell_to_id_node = {}
+		self.id_node_to_cell = {}
+		self.connections = {}
+		self.info = {}
+		self.id_edge_to_cells = {}
+		self.nodes = set()
+		self.edges = set()
+		self._map_to_graph()
 		self.recompute_bitmap = True
-		
 		
 	def get(self, handle: int = 0) -> np.ndarray:
 		"""

@@ -41,7 +41,7 @@ def choose_subset(handle, bitmaps, max_num):
                 conflicts_per_agents[a] += 1
     # Order dicts per number of conflicts
     sorted_dict = {k: v for k, v in sorted(conflicts_per_agents.items(), key=lambda item: item[1])}
-    max_num_keys = [key for i, key in enumerate(sorted_dict.keys(), 0) if i < max_num] # <======
+    max_num_keys = [key for i, key in enumerate(sorted_dict.keys(), 0) if i < max_num]
     # Return bitmaps relative to max_num most conflicting agents - the max_num top of the dictionary
     # bitmaps_subset = np.empty((max_num, num_rails, num_steps), dtype=int)
     bitmaps_subset = np.stack([bitmaps[a, :, :] for a in max_num_keys], axis=0)
