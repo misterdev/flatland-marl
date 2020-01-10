@@ -15,14 +15,17 @@ class Dueling_DQN(nn.Module):
         super(Dueling_DQN, self).__init__()
         self.action_space = action_space
         # input shape (batch_size, in_channels = height/num_rails, width/prediction_depth + 1) 
-        self.conv1 = nn.Conv1d(in_channels=height, out_channels=64, kernel_size=20)
+        # TODO make this 3D?
+        # self.conv1 = nn.Conv1d(in_channels=height, out_channels=64, kernel_size=1)
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=(1, width))
+
         # output shape (batch_size, out_channels, conv_width)
-        conv_width = dim_output(input_dim=width, filter_dim=20, stride_dim=1)
+        # conv_width = dim_output(input_dim=width, filter_dim=20, stride_dim=1)
 
         # in_features = conv_width * out_channels (feature maps/number of kernels, arbitrary)
         # after last Conv1d
-        self.fc1_adv = nn.Linear(in_features=conv_width * 64, out_features=512) 
-        self.fc1_val = nn.Linear(in_features=conv_width * 64, out_features=512)
+        self.fc1_adv = nn.Linear(in_features=64 * height, out_features=512) 
+        self.fc1_val = nn.Linear(in_features=64 * height, out_features=512)
         self.fc2_adv = nn.Linear(in_features=512, out_features=action_space)
         self.fc2_val = nn.Linear(in_features=512, out_features=1)
 

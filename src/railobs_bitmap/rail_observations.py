@@ -11,6 +11,8 @@ from flatland.core.env_observation_builder import ObservationBuilder
 from flatland.core.grid.grid4_utils import get_new_position, direction_to_point
 from flatland.envs.rail_env import RailEnvActions
 
+import src.railobs_bitmap.debug_utils as utils
+
 
 CardinalNode = \
 	NamedTuple('CardinalNode', [('id_node', int), ('cardinal_point', int)])
@@ -148,15 +150,17 @@ class RailObsForRailEnv(ObservationBuilder):
 			
 		return observations
 	
-	def get_initial_bitmaps(self):
+	def get_initial_bitmaps(self, debug):
 		"""
 		Getter for initial bitmaps.
 		:return: 
 		"""
+		if debug:
+			utils.print_rails(self.env.height, self.env.height, self.id_node_to_cell, self.id_edge_to_cells)
+			utils.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
 		return self.bitmaps
 	
 	def update_bitmaps(self, a, network_action, bitmaps):
-
 		current_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
 		current_dir = bitmaps[a, current_rail, 0]
 		
@@ -170,16 +174,15 @@ class RailObsForRailEnv(ObservationBuilder):
 			new_dir = bitmaps[a, new_rail, 0]
 
 			if bitmaps[a, new_rail, 0] == 0:
-				#if args.debug:
-				print("Train {} completed".format(a))
+				print("Train {} has reached its target".format(a))
 			else:
-				# print("Now on rail {} in direction {}".format(new_rail, new_dir))
+				# print("Train {} now on rail {} in direction {}".format(a, new_rail, new_dir))
 				# Check if rail is already occupied - to compute new exit time
 				lt, tt = self._last_train_on_rail(bitmaps, new_rail, a)
 				if tt > 0:
 					ca_dir = bitmaps[lt, new_rail, 0]
 					if not ca_dir == new_dir:
-						# print("CRASH with {}".format(lt))
+						print("{} CRASH with {}".format(a, lt))
 						# print("Undo move")
 						action = RailEnvActions.STOP_MOVING  # alternative ??
 						bitmaps[a] = np.roll(bitmaps[a], 1)
@@ -257,13 +260,16 @@ class RailObsForRailEnv(ObservationBuilder):
 			elif (node_id, entry_cp) == src: 
 				agent_entry_node = dst
 
+
+		count = 0 # TODO better name: remaining_switches
 		# Fill rail occupancy according to predicted position at ts
 		for ts in range(1, len(path)):
-			cell = path[ts] 
+			cell = path[ts]
 			# Find rail associated to cell
 			rail, _ = self.get_edge_from_cell(cell)
 			# Find crossing direction
 			if rail == -1: # Agent is on a switch
+				count += 1
 				# Skip duplicated cells (for agents with fractional speed)
 				if cell != path[ts+1]:
 					node_id = self.cell_to_id_node[cell]
@@ -282,7 +288,15 @@ class RailObsForRailEnv(ObservationBuilder):
 				assert crossing_dir != None
 
 				bitmap[rail, ts] = crossing_dir
-		
+
+				if count > 0:
+					bitmap[rail, ts-count:ts] = crossing_dir
+					count = 0
+
+		assert(count == 0, "All the cells of the bitmap should be filled")
+
+		temp = np.any(bitmap[:, 1:(len(path)-1)] != 0, axis=0)
+		assert(np.all(temp), "Thee agent's bitmap shouldn't have holes ")
 		return bitmap
 		
 	def _get_many_bitmap(self, handles: Optional[List[int]] = None) -> np.ndarray:

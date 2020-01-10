@@ -71,7 +71,7 @@ def main(args):
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
 	max_steps = 100
 	
-	dqn = DQNAgent(args, bitmap_height=max_conflicting_agents * max_rails, action_space=2)
+	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
 	
 	if args.render:
 		file = os.path.isfile("checkpoints/"+args.model_name)
@@ -108,34 +108,34 @@ def main(args):
 			for a in range(env.get_num_agents()):
 				# If two first consecutive bits in the bitmap are the same
 				# print(maps[a, :, :])
-				if np.all(maps[a, :, 0] == maps[a, :, 1]):
-					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
-					buffer_obs[a] = obs.copy()		
-					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
-					action = RailEnvActions.MOVE_FORWARD
-					network_action = 1
-					maps[a, :, 0] = 0
-					maps[a] = np.roll(maps[a], -1)
-				else: # Changing rails - need to perform a move
-					update_values[a] = True
-					# Print info TODO These are wrong if step = 0 agents not departed
-					current_rail = np.argmax(np.absolute(maps[a, :, 0]))
-					current_dir = maps[a, current_rail, 0]
-					'''
-					if maps[a, current_rail, 0] == 0:  # The first el is 0 for an agent READY_TO_DEPART
-						if args.debug:
-							print("Train {} ready to start".format(a))
-					else:
-						#print("Train {} on rail {} in direction {}".format(a, current_rail, current_dir))
-						assert (maps[a, current_rail, 1] == 0)
-					'''
-					# Let the network choose the action : current random_move()
-					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
-					# Save current state in buffer
-					buffer_obs[a] = obs.copy()		
-					network_action = dqn.act(obs) # Network chooses action
-					# Add code to handle bitmap ...
-					action, maps = observation_builder.update_bitmaps(a, network_action, maps)
+				# if np.all(maps[a, :, 0] == maps[a, :, 1]):
+				# 	obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
+				# 	buffer_obs[a] = obs.copy()		
+				# 	update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
+				# 	action = RailEnvActions.MOVE_FORWARD
+				# 	network_action = 1
+				# 	maps[a, :, 0] = 0
+				# 	maps[a] = np.roll(maps[a], -1)
+				# else: # Changing rails - need to perform a move
+				update_values[a] = True
+				# Print info TODO These are wrong if step = 0 agents not departed
+				current_rail = np.argmax(np.absolute(maps[a, :, 0]))
+				current_dir = maps[a, current_rail, 0]
+				'''
+				if maps[a, current_rail, 0] == 0:  # The first el is 0 for an agent READY_TO_DEPART
+					if args.debug:
+						print("Train {} ready to start".format(a))
+				else:
+					#print("Train {} on rail {} in direction {}".format(a, current_rail, current_dir))
+					assert (maps[a, current_rail, 1] == 0)
+				'''
+				# Let the network choose the action : current random_move()
+				obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
+				# Save current state in buffer
+				buffer_obs[a] = obs.copy()		
+				network_action = dqn.act(obs) # Network chooses action
+				# Add code to handle bitmap ...
+				action, maps = observation_builder.update_bitmaps(a, network_action, maps)
 
 				next_obs[a] = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
 				network_action_dict.update({a: network_action})
@@ -143,6 +143,8 @@ def main(args):
 				
 			# Obs is computed from bitmaps while state is computed from env step (temporarily)
 			_, reward, done, info = env.step(railenv_action_dict)  # Env step
+
+
 			if args.render:
 				env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
 			
