@@ -32,3 +32,48 @@ def print_rails(height, width, id_node_to_cell, id_edge_to_cells):
         f.write("\r\n")
     f.close()
     print('MAP SAVED AS "temp/map.txt"')
+
+def print_bitmaps(maps):
+    shape = maps.shape
+    f = open("./temp/bitmaps.txt","w+")
+
+    for a in range(shape[0]): # agent
+        f.write('AGENT {} \n'.format(a))
+        for r in range(shape[1]): # rail
+            f.write('>{:^3}:  '.format(r))
+            for t in range(shape[2]): # time
+                char = maps[a, r, t]
+                if char == 1:
+                    char = '[+]'
+                elif char == -1:
+                    char = '[-]'
+                f.write("{:^3}".format(char))
+            f.write('\n')
+        f.write('\n\n\n')
+
+    f.close()
+    print('BITMAP SAVED AS "temp/bitmaps.txt"')
+
+def print_cells_sequence(height, width, cells_sequence):
+    f = open("./temp/cell_seq.txt","w+")
+    
+    for a in cells_sequence:
+        map = np.full((height, width), -1, dtype=int)
+        cells = cells_sequence[a]
+        step = 0
+        for (x, y) in cells:
+            map[int(x), int(y)] = step
+            step += 1
+
+        f.write('AGENT {} \nCELLSEQ: {} \n'.format(a, cells))
+        for r in range(height):
+            for c in range(width):
+                char = map[r][c]
+                if char == -1:
+                    char = "·"
+                f.write("{:^4} ".format(char))
+            f.write("\r\n")
+        f.write("\n\n")
+
+    f.close()
+    print('CELL SEQ SAVED AS "temp/cell_seq.txt"')
