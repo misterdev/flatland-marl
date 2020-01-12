@@ -8,7 +8,7 @@ import numpy as np
 
 from flatland.core.env import Environment
 from flatland.core.env_observation_builder import ObservationBuilder
-from flatland.core.grid.grid4_utils import get_new_position
+from flatland.core.grid.grid4_utils import get_new_position, direction_to_point
 from flatland.envs.rail_env import RailEnvActions
 
 
@@ -222,6 +222,8 @@ class RailObsForRailEnv(ObservationBuilder):
 		"""
 		bitmap = np.zeros((self.num_rails, self.max_time_steps + 1), dtype=int)  # Max steps in the future + current ts
 		agent = self.env.agents[handle]
+		agent_direction = agent.position
+
 		path = self.cells_sequence[handle]
 		# Truncate path in the future, after reaching target
 		target_index = [i for i, pos in enumerate(path) if pos[0] == agent.target[0] and pos[1] == agent.target[1]]
@@ -232,16 +234,20 @@ class RailObsForRailEnv(ObservationBuilder):
 		# Add 0 at first ts - for 'not departed yet'
 		rail, _ = self.get_edge_from_cell(path[0])
 		bitmap[rail, 0] = 0 # TODO così mi perdo il target? forse devo avere target + 2?
-		
+
 		# Fill rail occupancy according to predicted position at ts
 		for ts in range(1, len(path)):
 			cell = path[ts] 
 			# Find rail associated to cell
 			rail, dist = self.get_edge_from_cell(cell)
+			# If it's going to a new cell
+			if path[ts-1] != cell:
+				# Calculate the new agent orientation
+				agent_direction = direction_to_point(path[ts-1], cell)
 			# Find crossing direction
 			if rail != -1:  # Means agent is not on a switch
 				direction = self.id_edge_to_cells[rail][dist][1]
-				crossing_dir = 1 if direction == agent.direction else -1  # Direction saved is considered as crossing_dir = 1
+				crossing_dir = 1 if direction == agent_direction else -1  # Direction saved is considered as crossing_dir = 1
 
 				bitmap[rail, ts] = crossing_dir
 		
@@ -407,10 +413,8 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		for edge in self.id_edge_to_cells.keys():
 			cells = [cell[0] for cell in self.id_edge_to_cells[edge]] 
-			dist = 0
 			if cell in cells:
 				return edge, cells.index(cell)
-				dist += 1
 
 		return -1, -1  # Node
 
