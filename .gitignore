@@ -6,5 +6,5 @@ fc_treeobs/nets/
 bot_config.txt
 src/nets
 *.png
-
 *.pyc
+temp/
