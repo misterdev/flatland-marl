@@ -150,22 +150,38 @@ class RailObsForRailEnv(ObservationBuilder):
 			
 		return observations
 	
-	def get_initial_bitmaps(self, debug):
+	def get_initial_bitmaps(self, print):
 		"""
 		Getter for initial bitmaps.
 		:return: 
 		"""
-		if debug:
+		if print:
 			utils.print_rails(self.env.height, self.env.height, self.id_node_to_cell, self.id_edge_to_cells)
 			utils.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
 		return self.bitmaps
-	
+
 	def update_bitmaps(self, a, network_action, bitmaps):
+
 		current_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
 		current_dir = bitmaps[a, current_rail, 0]
-		
+
+		def delay_schedule():
+			if not bitmaps[a, current_rail, 0] == 0:  # If agent is active
+				others = self._all_trains_on_rails(bitmaps, current_rail, a)
+				# print("Other trains on rail {}: {}".format(current_rail, others))
+				first_time = 1
+				for other in others:
+					oe, ot = other  # Other exit, other train (id)
+					ospeed = int(1 / self.env.agents[ot].speed_data['speed'])
+					if oe < first_time + ospeed:
+						delay = first_time + ospeed - oe
+						bitmaps[ot] = np.roll(bitmaps[ot], delay)
+						bitmaps[ot, current_rail, 0:delay] = current_dir
+						# print("Train {} delayed of {}".format(ot, delay))
+						first_time += ospeed
+
 		if network_action == 1:  # Go
-			# print("Advancing")
+			# print("Advancing", a)
 			action = self.predictor.get_shortest_path_action(a)  # TODO Add alternative paths
 			bitmaps[a, :, 0] = 0
 			bitmaps[a] = np.roll(bitmaps[a], -1)
@@ -193,6 +209,7 @@ class RailObsForRailEnv(ObservationBuilder):
 							delay = tt + int(1 / self.env.agents[a].speed_data['speed']) - t_time
 							bitmaps[a] = np.roll(bitmaps[a], delay)
 							bitmaps[a, new_rail, 0:delay] = new_dir
+							delay_schedule()
 						# print("Following {} with delay {}".format(lt, delay))
 						#else:
 						#	print("Following {} with no delay".format(lt))
@@ -200,20 +217,8 @@ class RailObsForRailEnv(ObservationBuilder):
 				#	print("New rail is free")
 		else:
 			# print("Waiting")
-			action = RailEnvActions.STOP_MOVING  # network_action = 0
-			if not bitmaps[a, current_rail, 0] == 0:  # If agent is active
-				others = self._all_trains_on_rails(bitmaps, current_rail, a)
-				# print("Other trains on rail {}: {}".format(current_rail, others))
-				first_time = 1
-				for other in others:
-					oe, ot = other  # Other exit, other train (id)
-					ospeed = int(1 / self.env.agents[ot].speed_data['speed'])
-					if oe < first_time + ospeed:
-						delay = first_time + ospeed - oe
-						bitmaps[ot] = np.roll(bitmaps[ot], delay)
-						bitmaps[ot, current_rail, 0:delay] = current_dir
-						# print("Train {} delayed of {}".format(ot, delay))
-						first_time += ospeed
+			action = RailEnvActions.STOP_MOVING
+			delay_schedule()
 
 		return action, bitmaps
 
@@ -231,7 +236,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		if len(target_index) != 0:
 			target_index = target_index[0]
 			path = path[:target_index + 1]
-		
+
 		# Add 0 at first ts - for 'not departed yet'
 		rail, _ = self.get_edge_from_cell(path[0])
 		bitmap[rail, 0] = 0 # TODO così mi perdo il target? forse devo avere target + 2?
