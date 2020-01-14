@@ -1,4 +1,0 @@
-- [] Represent switchs in bitmap 
-- [] Crash are not detected
-- [] train reached its target
-- [] bitmap unrolling independently from action

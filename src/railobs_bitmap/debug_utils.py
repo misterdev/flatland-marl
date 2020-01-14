@@ -35,13 +35,14 @@ def print_rails(height, width, id_node_to_cell, id_edge_to_cells):
 
 def print_bitmaps(maps, id=0):
     shape = maps.shape
-    f = open("./temp/bitmaps-{}.txt".format(id),"w+")
+    f = open("./temp/z-bitmaps-{}.txt".format(id),"w+")
 
     for a in range(shape[0]): # agent
         f.write('AGENT {} \n'.format(a))
         f.write('#COL:  ')
         for t in range(shape[2]): # time
             f.write("{:^3}".format(t))
+        f.write('\n')
         for r in range(shape[1]): # rail
             f.write('>{:^3}:  '.format(r))
             for t in range(shape[2]): # time
@@ -57,7 +58,7 @@ def print_bitmaps(maps, id=0):
         f.write('\n\n\n')
 
     f.close()
-    print('BITMAP SAVED AS "temp/bitmaps.txt"')
+    print('BITMAP SAVED AS "temp/z-bitmaps-{}.txt"'.format(id))
 
 def print_cells_sequence(height, width, cells_sequence):
     f = open("./temp/cell_seq.txt","w+")
