@@ -233,9 +233,9 @@ class RailObsForRailEnv(ObservationBuilder):
 		rail, _ = self.get_edge_from_cell(path[0])
 		bitmap[rail, 0] = 0 # TODO così mi perdo il target? forse devo avere target + 2?
 
-		agent_entry_node_id = None
-		agent_entry_cp = None
-
+		# Agent's cardinal node, where it entered the last edge
+		agent_entry_node = None
+		# Calculate initial edge entry point
 		i = 0
 		rail, _ = self.get_edge_from_cell(path[i])
 		if rail != -1: # If it's on an edge
@@ -245,14 +245,17 @@ class RailObsForRailEnv(ObservationBuilder):
 				i += 1
 				rail, _ = self.get_edge_from_cell(path[i])
 
-			(src_id, src_cp), (target_id, target_cp), _ = self.info[initial_rail]
+			src, dst, _ = self.info[initial_rail]
 			node_id = self.cell_to_id_node[path[i]]
-			if node_id == target_id:
-				agent_entry_node_id = src_id
-				agent_entry_cp = src_cp
-			elif node_id == src_id: 
-				agent_entry_node_id = target_id
-				agent_entry_cp = target_cp
+			# Reversed because we want the switch's cp
+			entry_cp = self._reverse_dir(direction_to_point(path[i-1], path[i]))
+			# If we reach the dst node
+			if (node_id, entry_cp) == dst:
+				# We entered from the src node (cross_dir = 1)
+				agent_entry_node = src
+			# Otherwise the opposite
+			elif (node_id, entry_cp) == src: 
+				agent_entry_node = dst
 
 		# Fill rail occupancy according to predicted position at ts
 		for ts in range(1, len(path)):
@@ -261,18 +264,19 @@ class RailObsForRailEnv(ObservationBuilder):
 			rail, _ = self.get_edge_from_cell(cell)
 			# Find crossing direction
 			if rail == -1: # Agent is on a switch
-				agent_entry_node_id = self.cell_to_id_node[cell]
-				# If I'm moving to another cell
+				# Skip duplicated cells (for agents with fractional speed)
 				if cell != path[ts+1]:
+					node_id = self.cell_to_id_node[cell]
 					# Calculate exit direction (that's the entry cp for the next edge)
-					agent_entry_cp = direction_to_point(cell, path[ts+1])
+					cp = direction_to_point(cell, path[ts+1])
+					# Not reversed because it's already relative to a switch
+					agent_entry_node = CardinalNode(node_id, cp)
 			else: # Agent is on a rail
-				#(CardinalNode(id_node1, cp1)
 				crossing_dir = None
-				(src_id, src_cp), (dst_id, dst_cp), _ = self.info[rail]
-				if (agent_entry_node_id, agent_entry_cp) == (dst_id, dst_cp):
+				src, dst, _ = self.info[rail]
+				if agent_entry_node == dst:
 					crossing_dir = 1
-				elif (agent_entry_node_id, agent_entry_cp) == (src_id, src_cp): 
+				elif agent_entry_node == src: 
 					crossing_dir = -1
 
 				assert crossing_dir != None
