@@ -33,12 +33,15 @@ def print_rails(height, width, id_node_to_cell, id_edge_to_cells):
     f.close()
     print('MAP SAVED AS "temp/map.txt"')
 
-def print_bitmaps(maps):
+def print_bitmaps(maps, id=0):
     shape = maps.shape
-    f = open("./temp/bitmaps.txt","w+")
+    f = open("./temp/bitmaps-{}.txt".format(id),"w+")
 
     for a in range(shape[0]): # agent
         f.write('AGENT {} \n'.format(a))
+        f.write('#COL:  ')
+        for t in range(shape[2]): # time
+            f.write("{:^3}".format(t))
         for r in range(shape[1]): # rail
             f.write('>{:^3}:  '.format(r))
             for t in range(shape[2]): # time
@@ -47,6 +50,8 @@ def print_bitmaps(maps):
                     char = '[+]'
                 elif char == -1:
                     char = '[-]'
+                elif char == 0:
+                    char = "·"
                 f.write("{:^3}".format(char))
             f.write('\n')
         f.write('\n\n\n')

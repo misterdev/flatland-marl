@@ -102,49 +102,50 @@ def main(args):
 		state, info = env.reset()
 		if args.render:
 			env_renderer.reset()
-		maps = observation_builder.get_initial_bitmaps(args.debug)
+		maps = observation_builder.get_initial_bitmaps(args.print)
 
-		if args.debug:
+		if args.print:
 			utils.print_bitmaps(maps)
+
 		# TODO : For the moment I'm considering only the shortest path, and no alternative paths
 		for step in range(max_steps - 1):
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
 				# If two first consecutive bits in the bitmap are the same
 				# print(maps[a, :, :])
-				# if np.all(maps[a, :, 0] == maps[a, :, 1]):
-				# 	obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
-				# 	buffer_obs[a] = obs.copy()		
-				# 	update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
-				# 	action = RailEnvActions.MOVE_FORWARD
-				# 	network_action = 1
-				# 	maps[a, :, 0] = 0
-				# 	maps[a] = np.roll(maps[a], -1)
-				# else: # Changing rails - need to perform a move
-				update_values[a] = True
-				# Print info TODO These are wrong if step = 0 agents not departed
-				current_rail = np.argmax(np.absolute(maps[a, :, 0]))
-				current_dir = maps[a, current_rail, 0]
-				'''
-				if maps[a, current_rail, 0] == 0:  # The first el is 0 for an agent READY_TO_DEPART
-					if args.debug:
-						print("Train {} ready to start".format(a))
-				else:
-					#print("Train {} on rail {} in direction {}".format(a, current_rail, current_dir))
-					assert (maps[a, current_rail, 1] == 0)
-				'''
-				# Let the network choose the action : current random_move()
-				obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
-				# Save current state in buffer
-				buffer_obs[a] = obs.copy()		
-				network_action = dqn.act(obs) # Network chooses action
-				# Add code to handle bitmap ...
-				action, maps = observation_builder.update_bitmaps(a, network_action, maps)
+				if np.all(maps[a, :, 0] == maps[a, :, 1]):
+					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
+					buffer_obs[a] = obs.copy()		
+					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
+					action = observation_builder.predictor.get_shortest_path_action(a)
+					network_action = 1
+					maps[a, :, 0] = 0
+					maps[a] = np.roll(maps[a], -1)
+				else: # Changing rails - need to perform a move
+					update_values[a] = True
+					# Print info TODO These are wrong if step = 0 agents not departed
+					current_rail = np.argmax(np.absolute(maps[a, :, 0]))
+					current_dir = maps[a, current_rail, 0]
+					'''
+					if maps[a, current_rail, 0] == 0:  # The first el is 0 for an agent READY_TO_DEPART
+						if args.debug:
+							print("Train {} ready to start".format(a))
+					else:
+						#print("Train {} on rail {} in direction {}".format(a, current_rail, current_dir))
+						assert (maps[a, current_rail, 1] == 0)
+					'''
+					# Let the network choose the action : current random_move()
+					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
+					# Save current state in buffer
+					buffer_obs[a] = obs.copy()		
+					network_action = dqn.act(obs) # Network chooses action
+					# Add code to handle bitmap ...
+					action, maps = observation_builder.update_bitmaps(a, network_action, maps)
 
-				next_obs[a] = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
+					next_obs[a] = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
 				network_action_dict.update({a: network_action})
 				railenv_action_dict.update({a: action})
-				
+
 			# Obs is computed from bitmaps while state is computed from env step (temporarily)
 			_, reward, done, info = env.step(railenv_action_dict)  # Env step
 
@@ -241,5 +242,6 @@ if __name__ == '__main__':
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
 	parser.add_argument('--train', action='store_true', help='Perform training')
+	parser.add_argument('--print', action='store_true', help='Save internal representations as files')
 	args = parser.parse_args()
 	main(args)
