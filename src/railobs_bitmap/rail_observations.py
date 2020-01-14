@@ -222,8 +222,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		"""
 		bitmap = np.zeros((self.num_rails, self.max_time_steps + 1), dtype=int)  # Max steps in the future + current ts
 		agent = self.env.agents[handle]
-		agent_direction = agent.position
-
 		path = self.cells_sequence[handle]
 		# Truncate path in the future, after reaching target
 		target_index = [i for i, pos in enumerate(path) if pos[0] == agent.target[0] and pos[1] == agent.target[1]]
@@ -235,19 +233,49 @@ class RailObsForRailEnv(ObservationBuilder):
 		rail, _ = self.get_edge_from_cell(path[0])
 		bitmap[rail, 0] = 0 # TODO così mi perdo il target? forse devo avere target + 2?
 
+		agent_entry_node_id = None
+		agent_entry_cp = None
+
+		i = 0
+		rail, _ = self.get_edge_from_cell(path[i])
+		if rail != -1: # If it's on an edge
+			initial_rail = rail
+			# Search first switch
+			while rail != -1:
+				i += 1
+				rail, _ = self.get_edge_from_cell(path[i])
+
+			(src_id, src_cp), (target_id, target_cp), _ = self.info[initial_rail]
+			node_id = self.cell_to_id_node[path[i]]
+			if node_id == target_id:
+				agent_entry_node_id = src_id
+				agent_entry_cp = src_cp
+			elif node_id == src_id: 
+				agent_entry_node_id = target_id
+				agent_entry_cp = target_cp
+
 		# Fill rail occupancy according to predicted position at ts
 		for ts in range(1, len(path)):
 			cell = path[ts] 
 			# Find rail associated to cell
-			rail, dist = self.get_edge_from_cell(cell)
-			# If it's going to a new cell
-			if path[ts-1] != cell:
-				# Calculate the new agent orientation
-				agent_direction = direction_to_point(path[ts-1], cell)
+			rail, _ = self.get_edge_from_cell(cell)
 			# Find crossing direction
-			if rail != -1:  # Means agent is not on a switch
-				direction = self.id_edge_to_cells[rail][dist][1]
-				crossing_dir = 1 if direction == agent_direction else -1  # Direction saved is considered as crossing_dir = 1
+			if rail == -1: # Agent is on a switch
+				agent_entry_node_id = self.cell_to_id_node[cell]
+				# If I'm moving to another cell
+				if cell != path[ts+1]:
+					# Calculate exit direction (that's the entry cp for the next edge)
+					agent_entry_cp = direction_to_point(cell, path[ts+1])
+			else: # Agent is on a rail
+				#(CardinalNode(id_node1, cp1)
+				crossing_dir = None
+				(src_id, src_cp), (dst_id, dst_cp), _ = self.info[rail]
+				if (agent_entry_node_id, agent_entry_cp) == (dst_id, dst_cp):
+					crossing_dir = 1
+				elif (agent_entry_node_id, agent_entry_cp) == (src_id, src_cp): 
+					crossing_dir = -1
+
+				assert crossing_dir != None
 
 				bitmap[rail, ts] = crossing_dir
 		

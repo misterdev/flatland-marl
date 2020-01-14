@@ -24,7 +24,6 @@ from flatland.envs.rail_env import RailEnvActions
 from src.railobs_bitmap.preprocessing import preprocess_obs
 from src.railobs_bitmap.agent import DQNAgent
 
-
 def main(args):
 	rail_generator = sparse_rail_generator(max_num_cities=args.max_num_cities,
 	                                       seed=args.seed,
