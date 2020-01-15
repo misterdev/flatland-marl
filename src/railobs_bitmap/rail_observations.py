@@ -165,21 +165,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		current_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
 		current_dir = bitmaps[a, current_rail, 0]
 
-		def delay_schedule():
-			if not bitmaps[a, current_rail, 0] == 0:  # If agent is active
-				others = self._all_trains_on_rails(bitmaps, current_rail, a)
-				# print("Other trains on rail {}: {}".format(current_rail, others))
-				first_time = 1
-				for other in others:
-					oe, ot = other  # Other exit, other train (id)
-					ospeed = int(1 / self.env.agents[ot].speed_data['speed'])
-					if oe < first_time + ospeed:
-						delay = first_time + ospeed - oe
-						bitmaps[ot] = np.roll(bitmaps[ot], delay)
-						bitmaps[ot, current_rail, 0:delay] = current_dir
-						# print("Train {} delayed of {}".format(ot, delay))
-						first_time += ospeed
-
 		if network_action == 1:  # Go
 			# print("Advancing", a)
 			action = self.predictor.get_shortest_path_action(a)  # TODO Add alternative paths
@@ -209,7 +194,6 @@ class RailObsForRailEnv(ObservationBuilder):
 							delay = tt + int(1 / self.env.agents[a].speed_data['speed']) - t_time
 							bitmaps[a] = np.roll(bitmaps[a], delay)
 							bitmaps[a, new_rail, 0:delay] = new_dir
-							delay_schedule()
 						# print("Following {} with delay {}".format(lt, delay))
 						#else:
 						#	print("Following {} with no delay".format(lt))
@@ -218,7 +202,19 @@ class RailObsForRailEnv(ObservationBuilder):
 		else:
 			# print("Waiting")
 			action = RailEnvActions.STOP_MOVING
-			delay_schedule()
+			if not bitmaps[a, current_rail, 0] == 0:  # If agent is active
+				others = self._all_trains_on_rails(bitmaps, current_rail, a)
+				# print("Other trains on rail {}: {}".format(current_rail, others))
+				first_time = 1
+				for other in others:
+					oe, ot = other  # Other exit, other train (id)
+					ospeed = int(1 / self.env.agents[ot].speed_data['speed'])
+					if oe < first_time + ospeed:
+						delay = first_time + ospeed - oe
+						bitmaps[ot] = np.roll(bitmaps[ot], delay)
+						bitmaps[ot, current_rail, 0:delay] = current_dir
+						# print("Train {} delayed of {}".format(ot, delay))
+						first_time += ospeed
 
 		return action, bitmaps
 
@@ -336,7 +332,7 @@ class RailObsForRailEnv(ObservationBuilder):
 	
 	def _all_trains_on_rails(self, maps, rail, handle):
 		"""
-		
+
 		:param maps: 
 		:param rail: 
 		:param handle: 
