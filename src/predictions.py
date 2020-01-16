@@ -42,6 +42,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
     """
 
     def __init__(self, max_depth: int = 20):
+        self.shortest_paths = None
         super().__init__(max_depth)
 
     def get(self, handle: int = None):
@@ -64,16 +65,16 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             - position axis 0
             - position axis 1
             - direction
-            - action taken to come here - my implementation
+            - action taken to come here - must be implemented TODO
             The prediction at 0 is the current position, direction etc.
         """
         agents = self.env.agents
         if handle:
             agents = [self.env.agents[handle]]
         distance_map: DistanceMap = self.env.distance_map
-
-        shortest_paths = get_shortest_paths(distance_map, max_depth=self.max_depth)
-        self.shortest_paths = shortest_paths
+        # Use map_depth + 1 to consider current time step 
+        self.shortest_paths = shortest_paths = get_shortest_paths(distance_map, max_depth=self.max_depth + 1)
+        
         prediction_dict = {}
         for agent in agents:
 
@@ -85,7 +86,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
                 agent_virtual_position = agent.target
             else:  # agent.status == DONE_REMOVED, prediction must be None
                 prediction = np.zeros(shape=(self.max_depth + 1, 5))
-                for i in range(self.max_depth):
+                for i in range(self.max_depth + 1):
                     prediction[i] = [i, None, None, None, None]
                 prediction_dict[agent.handle] = prediction
                 continue
@@ -94,8 +95,8 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             agent_speed = agent.speed_data["speed"]
             times_per_cell = int(np.reciprocal(agent_speed))
             prediction = np.zeros(shape=(self.max_depth + 1, 5))
-            # First cell is info relative to actual timestep, but I don't need this one TODO
-            #prediction[0] = [0, *agent_virtual_position, agent_virtual_direction, 0]
+            # First cell is info relative to actual time step
+            prediction[0] = [0, *agent_virtual_position, agent_virtual_direction, 0]
 
             shortest_path = shortest_paths[agent.handle]
 
@@ -106,11 +107,10 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             new_direction = agent_virtual_direction
             new_position = agent_virtual_position
             visited = OrderedSet()
-            for index in range(self.max_depth):
+            for index in range(1, self.max_depth + 1):
                 # If we're at the target or not moving, stop moving until max_depth is reached
-                # TODO Changing this to avoid stuck agent
                 #if new_position == agent.target or not agent.moving or not shortest_path:
-                if new_position == agent.target or not shortest_path:
+                if new_position == agent.target or not shortest_path: # Writing like this you don't consider the fact that the agent is stopped
                     prediction[index] = [index, *new_position, new_direction, RailEnvActions.STOP_MOVING]
                     visited.add((*new_position, agent.direction))
                     continue
@@ -132,13 +132,14 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
         return prediction_dict
 
-    '''
-    Given prediction dict for all agents, return sequence of cells walked in the prediction as a dict
-    where key is the agent handle and value is the list of tuples (xi, yi) that are crossed.
-    Mostly used to debug.
-    '''
-
     def compute_cells_sequence(self, prediction_dict):
+        """
+        Given prediction dict for all agents, return sequence of cells walked in the prediction as a dict
+        where key is the agent handle and value is the list of tuples (xi, yi) that are crossed.
+        Mostly used to debug.
+        :param prediction_dict: 
+        :return: 
+        """
 
         cells_sequence = defaultdict(list)
         agents = self.env.agents
@@ -150,109 +151,44 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         return cells_sequence
 
     def get_prediction_depth(self):
+        """
+        
+        :return: 
+        """
         return self.max_depth
 
-    def get_shortest_paths(self):
-        return self.shortest_paths
-
-    def get_k_shortest_paths(self,
-                             source_position: Tuple[int, int],
-                             source_direction: int,
-                             target_position=Tuple[int, int],
-                             k: int = 1, debug=False) -> List[Tuple[Waypoint]]:
+    def get_shortest_path_action(self, handle):
         """
-        Computes the k shortest paths using modified Dijkstra
-        following pseudo-code https://en.wikipedia.org/wiki/K_shortest_path_routing
-        In contrast to the pseudo-code in wikipedia, we do not a allow for loopy paths.
-
-        Parameters
-        ----------
-        env :             RailEnv
-        source_position:  Tuple[int,int]
-        source_direction: int
-        target_position:  Tuple[int,int]
-        k :               int
-            max number of shortest paths
-        debug:            bool
-            print debug statements
-
-        Returns
-        -------
-        List[Tuple[WalkingElement]]
-            We use tuples since we need the path elements to be hashable.
-            We use a list of paths in order to keep the order of length.
+        Takes an agent handle and returns next action for that agent following shortest path:
+        - if agent status == READY_TO_DEPART => agent moves forward;
+        - if agent status == ACTIVE => pick action according to shortest path;
+        - if agent status == DONE => agent does nothing.
+        :param handle: 
+        :return: 
         """
 
-        # P: set of shortest paths from s to t
-        # P =empty,
-        shortest_paths: List[Tuple[Waypoint]] = []
+        agent = self.env.agents[handle]
 
-        # countu: number of shortest paths found to node u
-        # countu = 0, for all u in V
-        count = {(r, c, d): 0 for r in range(self.env.height) for c in range(self.env.width) for d in range(4)}
+        if agent.status == RailAgentStatus.READY_TO_DEPART:
+            action = RailEnvActions.MOVE_FORWARD
 
-        # B is a heap data structure containing paths
-        # N.B. use OrderedSet to make result deterministic!
-        heap: OrderedSet[Tuple[Waypoint]] = OrderedSet()
+        elif agent.status == RailAgentStatus.ACTIVE:
+            # This can return None when rails are disconnected or there was an error in the DistanceMap
+            if self.shortest_paths[handle] is None:  # Railway disrupted
+                action = RailEnvActions.STOP_MOVING
+            else:
+                step = self.shortest_paths[handle][0]
+                next_action_element = step[2][0]  # Get next_action_element
 
-        # insert path Ps = {s} into B with cost 0
-        heap.add((Waypoint(source_position, source_direction),))
+                # Just to use the correct form/name
+                if next_action_element == 1:
+                    action = RailEnvActions.MOVE_LEFT
+                elif next_action_element == 2:
+                    action = RailEnvActions.MOVE_FORWARD
+                elif next_action_element == 3:
+                    action = RailEnvActions.MOVE_RIGHT
 
-        # while B is not empty and countt < K:
-        while len(heap) > 0 and len(shortest_paths) < k:
-            if debug:
-                print("iteration heap={}, shortest_paths={}".format(heap, shortest_paths))
-            # – let Pu be the shortest cost path in B with cost C
-            cost = np.inf
-            pu = None
-            for path in heap:
-                if len(path) < cost:
-                    pu = path
-                    cost = len(path)
-            u: Waypoint = pu[-1]
-            if debug:
-                print("  looking at pu={}".format(pu))
+        else:  # If status == DONE
+            action = RailEnvActions.DO_NOTHING
 
-            #     – B = B − {Pu }
-            heap.remove(pu)
-            #     – countu = countu + 1
-
-            urcd = (*u.position, u.direction)
-            count[urcd] += 1
-
-            # – if u = t then P = P U {Pu}
-            if u.position == target_position:
-                if debug:
-                    print(" found of length {} {}".format(len(pu), pu))
-                shortest_paths.append(pu)
-
-            # – if countu ≤ K then
-            # CAVEAT: do not allow for loopy paths
-            elif count[urcd] <= k:
-                possible_transitions = self.env.rail.get_transitions(*urcd)
-                if debug:
-                    print("  looking at neighbors of u={}, transitions are {}".format(u, possible_transitions))
-                #     for each vertex v adjacent to u:
-                for new_direction in range(4):
-                    if debug:
-                        print("        looking at new_direction={}".format(new_direction))
-                    if possible_transitions[new_direction]:
-                        new_position = get_new_position(u.position, new_direction)
-                        if debug:
-                            print("        looking at neighbor v={}".format((*new_position, new_direction)))
-
-                        v = Waypoint(position=new_position, direction=new_direction)
-                        # CAVEAT: do not allow for loopy paths
-                        if v in pu:
-                            continue
-
-                        # – let Pv be a new path with cost C + w(u, v) formed by concatenating edge (u, v) to path Pu
-                        pv = pu + (v,)
-                        #     – insert Pv into B
-                        heap.add(pv)
-
-        # return P
-        return shortest_paths
-
-
-    
+        return action

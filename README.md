@@ -1,1 +1,1 @@
-# flatland-challenge-marl
+# flatland-marl
