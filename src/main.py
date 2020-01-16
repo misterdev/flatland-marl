@@ -9,7 +9,7 @@ import os
 from collections import deque
 
 # These 2 lines must go before the import from src/
-base_dir = Path(__file__).resolve().parent.parent.parent
+base_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(base_dir))
 
 from flatland.envs.rail_env import RailEnv
@@ -17,14 +17,14 @@ from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
 from flatland.envs.malfunction_generators import malfunction_from_params
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
-from src.railobs_bitmap.rail_observations import RailObsForRailEnv
-from src.railobs_bitmap.predictions import ShortestPathPredictorForRailEnv
+from src.rail_observations import RailObsForRailEnv
+from src.predictions import ShortestPathPredictorForRailEnv
 from flatland.envs.rail_env import RailEnvActions
 
-from src.railobs_bitmap.preprocessing import preprocess_obs
-from src.railobs_bitmap.agent import DQNAgent
+from src.preprocessing import preprocess_obs
+from src.agent import DQNAgent
 
-import src.railobs_bitmap.debug_utils as utils
+import src.debug_utils as utils
 
 def main(args):
 	rail_generator = sparse_rail_generator(max_num_cities=args.max_num_cities,

@@ -11,7 +11,7 @@ from flatland.core.env_observation_builder import ObservationBuilder
 from flatland.core.grid.grid4_utils import get_new_position, direction_to_point
 from flatland.envs.rail_env import RailEnvActions
 
-import src.railobs_bitmap.debug_utils as utils
+import src.debug_utils as utils
 
 
 CardinalNode = \

@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from src.railobs_bitmap.model import Dueling_DQN
+from src.model import Dueling_DQN
 
 # TODO add these to argparse
 # Params for ReplayBuffer class
