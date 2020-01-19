@@ -1,5 +1,6 @@
 
 from typing import NamedTuple, Tuple
+
 from flatland.envs.rail_env import RailEnvNextAction
 
 WalkingElement = \

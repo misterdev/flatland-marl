@@ -4,18 +4,17 @@ Collection of environment-specific PredictionBuilder.
 
 import numpy as np
 from collections import defaultdict
-from typing import List
-
 
 from flatland.core.env_prediction_builder import PredictionBuilder
 from flatland.envs.agent_utils import RailAgentStatus
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.distance_map import DistanceMap
 from flatland.envs.rail_env import RailEnvActions, RailEnvNextAction
-from flatland.envs.rail_env_shortest_paths import get_shortest_paths, get_new_position
+from flatland.envs.rail_env_shortest_paths import get_new_position
 from flatland.utils.ordered_set import OrderedSet
 
 from src.utils.types import WalkingElement, Waypoint
+from src.utils.shortest_path import get_shortest_paths
 
 # TODO 'Add action taken to come here' info
 
