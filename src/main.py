@@ -24,7 +24,7 @@ from flatland.envs.rail_env import RailEnvActions
 from src.preprocessing import preprocess_obs
 from src.agent import DQNAgent
 
-import src.debug_utils as utils
+import src.utils.debug as debug
 
 def main(args):
 	rail_generator = sparse_rail_generator(max_num_cities=args.max_num_cities,
@@ -105,7 +105,7 @@ def main(args):
 		maps = observation_builder.get_initial_bitmaps(args.print)
 
 		if args.print:
-			utils.print_bitmaps(maps)
+			debug.print_bitmaps(maps)
 
 		# TODO : For the moment I'm considering only the shortest path, and no alternative paths
 		for step in range(max_steps - 1):

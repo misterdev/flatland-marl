@@ -11,7 +11,7 @@ from flatland.core.env_observation_builder import ObservationBuilder
 from flatland.core.grid.grid4_utils import get_new_position, direction_to_point
 from flatland.envs.rail_env import RailEnvActions
 
-import src.debug_utils as utils
+import src.utils.debug as debug
 
 
 CardinalNode = \
@@ -156,8 +156,8 @@ class RailObsForRailEnv(ObservationBuilder):
 		:return: 
 		"""
 		if print:
-			utils.print_rails(self.env.height, self.env.height, self.id_node_to_cell, self.id_edge_to_cells)
-			utils.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
+			debug.print_rails(self.env.height, self.env.height, self.id_node_to_cell, self.id_edge_to_cells)
+			debug.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
 		return self.bitmaps
 
 	def update_bitmaps(self, a, network_action, bitmaps):
