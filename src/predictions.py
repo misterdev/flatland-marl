@@ -4,7 +4,7 @@ Collection of environment-specific PredictionBuilder.
 
 import numpy as np
 from collections import defaultdict
-from typing import NamedTuple, Tuple, List
+from typing import List
 
 
 from flatland.core.env_prediction_builder import PredictionBuilder
@@ -15,21 +15,7 @@ from flatland.envs.rail_env import RailEnvActions, RailEnvNextAction
 from flatland.envs.rail_env_shortest_paths import get_shortest_paths, get_new_position
 from flatland.utils.ordered_set import OrderedSet
 
-
-
-WalkingElement = \
-    NamedTuple('WalkingElement',
-               [('position', Tuple[int, int]), ('direction', int), ('next_action_element', RailEnvNextAction)])
-
-# Flatland v3
-# A way point is the entry into a cell defined by
-# - the row and column coordinates of the cell entered
-# - direction, in which the agent is facing to enter the cell.
-# This induces a graph on top of the FLATland cells:
-# - four possible way points per cell
-# - edges are the possible transitions in the cell.
-Waypoint = NamedTuple('Waypoint', [('position', Tuple[int, int]), ('direction', int)])
-
+from src.utils.types import WalkingElement, Waypoint
 
 # TODO 'Add action taken to come here' info
 
@@ -72,9 +58,10 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         if handle:
             agents = [self.env.agents[handle]]
         distance_map: DistanceMap = self.env.distance_map
-        # Use map_depth + 1 to consider current time step 
-        self.shortest_paths = shortest_paths = get_shortest_paths(distance_map, max_depth=self.max_depth + 1)
-        
+        # Use map_depth + 1 to consider current time step
+        self.shortest_paths = shortest_paths = get_shortest_paths(
+            distance_map, max_depth=self.max_depth + 1)
+
         prediction_dict = {}
         for agent in agents:
 
@@ -96,7 +83,8 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             times_per_cell = int(np.reciprocal(agent_speed))
             prediction = np.zeros(shape=(self.max_depth + 1, 5))
             # First cell is info relative to actual time step
-            prediction[0] = [0, *agent_virtual_position, agent_virtual_direction, 0]
+            prediction[0] = [0, *agent_virtual_position,
+                             agent_virtual_direction, 0]
 
             shortest_path = shortest_paths[agent.handle]
 
@@ -109,9 +97,11 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             visited = OrderedSet()
             for index in range(1, self.max_depth + 1):
                 # If we're at the target or not moving, stop moving until max_depth is reached
-                #if new_position == agent.target or not agent.moving or not shortest_path:
-                if new_position == agent.target or not shortest_path: # Writing like this you don't consider the fact that the agent is stopped
-                    prediction[index] = [index, *new_position, new_direction, RailEnvActions.STOP_MOVING]
+                # if new_position == agent.target or not agent.moving or not shortest_path:
+                # Writing like this you don't consider the fact that the agent is stopped
+                if new_position == agent.target or not shortest_path:
+                    prediction[index] = [index, *new_position,
+                                         new_direction, RailEnvActions.STOP_MOVING]
                     visited.add((*new_position, agent.direction))
                     continue
 
@@ -152,7 +142,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
     def get_prediction_depth(self):
         """
-        
+
         :return: 
         """
         return self.max_depth
