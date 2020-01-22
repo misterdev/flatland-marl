@@ -99,8 +99,9 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.recompute_bitmap = True
 		
 	def get(self, handle: int = 0) -> np.ndarray:
+		assert False
+		# TODO this is useless
 		"""
-		Currently this implementation of bitmap has 'holes' of zeros when agent lies on a switch. TODO
 		:param handle: 
 		:return: Bitmap of rail obs for agent handle.
 		"""
@@ -145,11 +146,15 @@ class RailObsForRailEnv(ObservationBuilder):
 			self.recompute_bitmap = False
 		
 		observations = {}
-		for a in handles:
+		# TODO do something for this?
+		""" for a in handles:
 			observations[a] = self.get(a)
-			
+			 """
 		return observations
 	
+	def get_alt_bitmaps(self, handle):
+		return True
+
 	def get_initial_bitmaps(self, print):
 		"""
 		Getter for initial bitmaps.
@@ -158,6 +163,11 @@ class RailObsForRailEnv(ObservationBuilder):
 		if print:
 			debug.print_rails(self.env.height, self.env.height, self.id_node_to_cell, self.id_edge_to_cells)
 			debug.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
+		return self.bitmaps
+
+	def unroll_bitmap(self, handle):
+		self.bitmaps[handle, :, 0] = 0
+		self.bitmaps[handle] = np.roll(self.bitmaps[handle], -1)
 		return self.bitmaps
 
 	def update_bitmaps(self, a, network_action, bitmaps):

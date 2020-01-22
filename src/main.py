@@ -112,32 +112,24 @@ def main(args):
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
 				# If two first consecutive bits in the bitmap are the same
-				# print(maps[a, :, :])
 				if np.all(maps[a, :, 0] == maps[a, :, 1]):
 					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
 					buffer_obs[a] = obs.copy()		
 					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
 					action = observation_builder.predictor.get_shortest_path_action(a)
 					network_action = 1
-					maps[a, :, 0] = 0
-					maps[a] = np.roll(maps[a], -1)
+					maps = observation_builder.unroll_bitmap(a)
 				else: # Changing rails - need to perform a move
 					update_values[a] = True
-					# Print info TODO These are wrong if step = 0 agents not departed
-					current_rail = np.argmax(np.absolute(maps[a, :, 0]))
-					current_dir = maps[a, current_rail, 0]
-					'''
-					if maps[a, current_rail, 0] == 0:  # The first el is 0 for an agent READY_TO_DEPART
-						if args.debug:
-							print("Train {} ready to start".format(a))
-					else:
-						#print("Train {} on rail {} in direction {}".format(a, current_rail, current_dir))
-						assert (maps[a, current_rail, 1] == 0)
-					'''
+					# TODO generate alt bitmaps:
+					# alt_bitmaps = []
+					# for bitmap in alt_bitmaps: 
 					# Let the network choose the action : current random_move()
+					# TODO modify this to take it as parameter
 					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
 					# Save current state in buffer
-					buffer_obs[a] = obs.copy()		
+					buffer_obs[a] = obs.copy()
+					# TODO store and choose higher one	
 					network_action = dqn.act(obs) # Network chooses action
 					# Add code to handle bitmap ...
 					action, maps = observation_builder.update_bitmaps(a, network_action, maps)
