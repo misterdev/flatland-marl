@@ -43,7 +43,7 @@ def main(args):
 	schedule_generator = sparse_schedule_generator(speed_ration_map)
 	
 	prediction_builder = ShortestPathPredictorForRailEnv(max_depth=args.prediction_depth)
-	observation_builder = RailObsForRailEnv(predictor=prediction_builder)
+	obs_builder = RailObsForRailEnv(predictor=prediction_builder)
 
 	env = RailEnv(width=args.width,
 	              height=args.height,
@@ -51,7 +51,7 @@ def main(args):
 	              random_seed=0,
 	              schedule_generator=schedule_generator,
 	              number_of_agents=args.num_agents,
-	              obs_builder_object=observation_builder,
+	              obs_builder_object=obs_builder,
 	              malfunction_generator_and_process_data=malfunction_from_params(
 		              parameters={
 			              'malfunction_rate': args.malfunction_rate,
@@ -102,29 +102,32 @@ def main(args):
 		state, info = env.reset()
 		if args.render:
 			env_renderer.reset()
-		maps = observation_builder.get_initial_bitmaps(args.print)
+		maps = obs_builder.get_bitmaps(args.print)
 
 		if args.print:
 			debug.print_bitmaps(maps)
 
-		# TODO : For the moment I'm considering only the shortest path, and no alternative paths
 		for step in range(max_steps - 1):
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
 				# If two first consecutive bits in the bitmap are the same
 				if np.all(maps[a, :, 0] == maps[a, :, 1]):
 					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
-					buffer_obs[a] = obs.copy()		
+					buffer_obs[a] = obs.copy()
 					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
-					action = observation_builder.predictor.get_shortest_path_action(a)
+					action = obs_builder.predictor.get_shortest_path_action(a)
 					network_action = 1
-					maps = observation_builder.unroll_bitmap(a)
+					maps = obs_builder.unroll_bitmap(a)
 				else: # Changing rails - need to perform a move
-					update_values[a] = True
 					# TODO generate alt bitmaps:
+					# alt_maps = obs_builder.get_
+					
 					# alt_bitmaps = []
-					# for bitmap in alt_bitmaps: 
+					# for bitmap in alt_bitmaps:
 					# Let the network choose the action : current random_move()
+
+
+					update_values[a] = True
 					# TODO modify this to take it as parameter
 					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
 					# Save current state in buffer
@@ -132,7 +135,7 @@ def main(args):
 					# TODO store and choose higher one	
 					network_action = dqn.act(obs) # Network chooses action
 					# Add code to handle bitmap ...
-					action, maps = observation_builder.update_bitmaps(a, network_action, maps)
+					action, maps = obs_builder.update_bitmaps(a, network_action, maps)
 
 					next_obs[a] = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
 				network_action_dict.update({a: network_action})

@@ -98,39 +98,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		self._map_to_graph()
 		self.recompute_bitmap = True
 		
-	def get(self, handle: int = 0) -> np.ndarray:
-		assert False
-		# TODO this is useless
-		"""
-		:param handle: 
-		:return: Bitmap of rail obs for agent handle.
-		"""
-		
-		rail_obs = np.zeros((self.num_rails, self.max_time_steps + 1), dtype=int) # Max steps in the future + current ts
-		'''
-		agent = self.env.agents[handle]
-		path = self.cells_sequence[handle]
-		# Truncate path in the future, after reaching target
-		target_index = [i for i, pos in enumerate(path) if pos[0] == agent.target[0] and pos[1] == agent.target[1]]
-		if len(target_index) != 0:
-			target_index = target_index[0]
-			path = path[:target_index+1]
-		
-		# Fill rail occupancy according to predicted position at ts
-		for ts in range(len(path)):
-			cell = path[ts]
-			# Find rail associated to cell
-			rail, dist = self.get_edge_from_cell(cell)
-			# Find crossing direction
-			if rail != -1: # Means agent is not on a switch
-				direction = self.id_edge_to_cells[rail][dist][1]
-				crossing_dir = 1 if direction == agent.direction else -1 # Direction saved is considered as crossing_dir = 1
-				
-				rail_obs[rail, ts] = crossing_dir
-	
-		return rail_obs
-		'''
-		
 	def get_many(self, handles: Optional[List[int]] = None) -> Dict[int, np.ndarray]:
 		"""
 		
@@ -146,16 +113,12 @@ class RailObsForRailEnv(ObservationBuilder):
 			self.recompute_bitmap = False
 		
 		observations = {}
-		# TODO do something for this?
-		""" for a in handles:
-			observations[a] = self.get(a)
-			 """
 		return observations
 	
 	def get_alt_bitmaps(self, handle):
 		return True
 
-	def get_initial_bitmaps(self, print):
+	def get_bitmaps(self, print):
 		"""
 		Getter for initial bitmaps.
 		:return: 
