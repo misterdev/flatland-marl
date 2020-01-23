@@ -14,9 +14,7 @@ from flatland.envs.rail_env_shortest_paths import get_new_position
 from flatland.utils.ordered_set import OrderedSet
 
 from src.utils.types import WalkingElement, Waypoint
-from src.utils.shortest_path import get_shortest_paths
-
-# TODO 'Add action taken to come here' info
+from src.utils.shortest_path import get_shortest_paths, get_altpaths
 
 class ShortestPathPredictorForRailEnv(PredictionBuilder):
     """
@@ -28,6 +26,11 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
     def __init__(self, max_depth: int = 20):
         self.shortest_paths = None
+
+        self.empty_prediction = np.zeros(shape=(max_depth + 1, 5))
+        for i in range(max_depth + 1):
+            self.empty_prediction[i] = [i, None, None, None, None]
+
         super().__init__(max_depth)
 
     def get(self, handle: int = None):
@@ -63,72 +66,73 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
         prediction_dict = {}
         for agent in agents:
-
-            if agent.status == RailAgentStatus.READY_TO_DEPART:
-                agent_virtual_position = agent.initial_position
-            elif agent.status == RailAgentStatus.ACTIVE:
-                agent_virtual_position = agent.position
-            elif agent.status == RailAgentStatus.DONE:
-                agent_virtual_position = agent.target
-            else:  # agent.status == DONE_REMOVED, prediction must be None
-                # TODO don't recalculate every time
-                prediction = np.zeros(shape=(self.max_depth + 1, 5))
-                for i in range(self.max_depth + 1):
-                    prediction[i] = [i, None, None, None, None]
-                prediction_dict[agent.handle] = prediction
-                continue
-
-            agent_virtual_direction = agent.direction
-            agent_speed = agent.speed_data["speed"]
-            times_per_cell = int(np.reciprocal(agent_speed))
-            prediction = np.zeros(shape=(self.max_depth + 1, 5))
-            # First cell is info relative to actual time step
-            prediction[0] = [0, *agent_virtual_position,
-                             agent_virtual_direction, 0]
-
-            shortest_path = shortest_paths[agent.handle]
-
-            # If there is a shortest path, remove the initial position
-            if shortest_path:
-                shortest_path = shortest_path[1:]
-
-            new_direction = agent_virtual_direction
-            new_position = agent_virtual_position
-            visited = OrderedSet()
-            for index in range(1, self.max_depth + 1):
-                # If we're at the target or not moving, stop moving until max_depth is reached
-                # if new_position == agent.target or not agent.moving or not shortest_path:
-                # Writing like this you don't consider the fact that the agent is stopped
-                if new_position == agent.target or not shortest_path:
-                    prediction[index] = [index, *new_position,
-                                         new_direction, RailEnvActions.STOP_MOVING]
-                    visited.add((*new_position, agent.direction))
-                    continue
-
-                if index % times_per_cell == 0:
-
-                    new_position = shortest_path[0].position
-                    new_direction = shortest_path[0].direction
-
-                    shortest_path = shortest_path[1:]
-
-                # Prediction is ready
-                prediction[index] = [index, *new_position, new_direction, 0]
-                visited.add((*new_position, new_direction))
-
-            # TODO: very bady side effects for visualization only: hand the dev_pred_dict back instead of setting on env!
-            self.env.dev_pred_dict[agent.handle] = visited
-            prediction_dict[agent.handle] = prediction
+            handle = agent.handle
+            prediction_dict[handle] = self.prediction_from_path(handle, shortest_paths[handle])
 
         return prediction_dict
 
+    def get_altpaths(self, handle):
+        altpaths = get_altpaths(handle, self.env.distance_map, 500, self.cell_to_id_node)
+        cells_seqs = []
+        for path in altpaths:
+            prediction = self.prediction_from_path(handle, path)
+            cells_seqs.append(self.cells_seq_from_prediction(handle, prediction))
+        
+        return altpaths, cells_seqs
 
-    def prediction_from_path(self, path, handle):
-        return True
+    def prediction_from_path(self, handle, path):
+        agent = self.env.agents[handle]
+        prediction = np.zeros(shape=(self.max_depth + 1, 5))
 
-    def cells_seq_from_prediction(self, handle, prediction_dict):
+        if agent.status == RailAgentStatus.READY_TO_DEPART:
+            agent_virtual_position = agent.initial_position
+        elif agent.status == RailAgentStatus.ACTIVE:
+            agent_virtual_position = agent.position
+        elif agent.status == RailAgentStatus.DONE:
+            agent_virtual_position = agent.target
+        else:  # agent.status == DONE_REMOVED, prediction must be None
+            return self.empty_prediction
+
+        agent_virtual_direction = agent.direction
+        agent_speed = agent.speed_data["speed"]
+        times_per_cell = int(np.reciprocal(agent_speed))
+        # First cell is info relative to actual time step
+        prediction[0] = [0, *agent_virtual_position,
+                            agent_virtual_direction, 0]
+
+        # If there is a shortest path, remove the initial position
+        if path:
+            path = path[1:]
+
+        new_direction = agent_virtual_direction
+        new_position = agent_virtual_position
+        visited = OrderedSet()
+        for index in range(1, self.max_depth + 1):
+            # If we're at the target or not moving, stop moving until max_depth is reached
+            # if new_position == agent.target or not agent.moving or not path:
+            # Writing like this you don't consider the fact that the agent is stopped
+            if new_position == agent.target or not path:
+                prediction[index] = [index, *new_position,
+                                        new_direction, RailEnvActions.STOP_MOVING]
+                visited.add((*new_position, agent.direction))
+                continue
+
+            if index % times_per_cell == 0:
+
+                new_position = path[0].position
+                new_direction = path[0].direction
+
+                path = path[1:]
+
+            # Prediction is ready
+            prediction[index] = [index, *new_position, new_direction, 0]
+            visited.add((*new_position, new_direction))
+
+        return prediction
+
+    def cells_seq_from_prediction(self, handle, prediction):
         cells_sequence = []
-        for step in prediction_dict:
+        for step in prediction:
             cell_pos = (step[1], step[2])  # Takes (yi, xi)
             cells_sequence.append(cell_pos)
 
