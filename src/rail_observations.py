@@ -116,13 +116,12 @@ class RailObsForRailEnv(ObservationBuilder):
 		return observations
 	
 	def get_altmaps(self, handle):
-		# paths = self.predictor.get_altpaths(a)
-		
-		# altmaps = np.zeros(len(paths), rails, max_depth + 1)
-		# for path in paths:
-		# 	altmaps[i] = _get_bitmap(handle, path)
-		# return altmaps, paths
-		return True
+		altpaths, cells_seqs = self.predictor.get_altpaths(handle, self.cell_to_id_node)
+		bitmaps = []
+		for seq in cells_seqs:
+			bitmaps.append(self._bitmap_from_cells_seq(handle, seq))
+
+		return bitmaps, altpaths
 
 	def get_bitmaps(self, print):
 		"""
@@ -196,15 +195,14 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		return action, bitmaps
 
-	def _get_bitmap(self, handle: int = 0) -> np.ndarray:
+	def _bitmap_from_cells_seq(self, handle, path) -> np.ndarray:
 		"""
-		Compute initial bitmap for agent handle, given a selected path.
+		Compute bitmap for agent handle, given a selected path.
 		:param handle: 
 		:return: 
 		"""
 		bitmap = np.zeros((self.num_rails, self.max_time_steps + 1), dtype=int)  # Max steps in the future + current ts
 		agent = self.env.agents[handle]
-		path = self.cells_sequence[handle]
 		# Truncate path in the future, after reaching target
 		target_index = [i for i, pos in enumerate(path) if pos[0] == agent.target[0] and pos[1] == agent.target[1]]
 		if len(target_index) != 0:
@@ -238,6 +236,13 @@ class RailObsForRailEnv(ObservationBuilder):
 			# Otherwise the opposite
 			elif (node_id, entry_cp) == src: 
 				agent_entry_node = dst
+		else:
+			#Handle the case you call this while on a switch before a rail
+			node_id = self.cell_to_id_node[path[i]]
+			# Calculate exit direction (that's the entry cp for the next edge)
+			cp = direction_to_point(path[0], path[1]) # it's ok
+			# Not reversed because it's already relative to a switch
+			agent_entry_node = CardinalNode(node_id, cp)
 
 
 		count = 0 # TODO better name: remaining_switches
@@ -286,8 +291,8 @@ class RailObsForRailEnv(ObservationBuilder):
 		bitmaps = np.zeros((len(handles), self.num_rails, self.max_time_steps + 1), dtype=int)
 		# Stack bitmaps
 		for a in range(len(handles)):
-			bitmaps[a, :, :] = self._get_bitmap(a)
-		
+			bitmaps[a, :, :] = self._bitmap_from_cells_seq(a, self.cells_sequence[a])
+
 		return bitmaps
 	
 	

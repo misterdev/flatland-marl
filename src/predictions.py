@@ -71,8 +71,8 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
         return prediction_dict
 
-    def get_altpaths(self, handle):
-        altpaths = get_altpaths(handle, self.env.distance_map, 500, self.cell_to_id_node)
+    def get_altpaths(self, handle, cell_to_id_node):
+        altpaths = get_altpaths(handle, self.env.distance_map, 500, cell_to_id_node)
         cells_seqs = []
         for path in altpaths:
             prediction = self.prediction_from_path(handle, path)
