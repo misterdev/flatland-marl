@@ -89,11 +89,13 @@ class DQNAgent:
 			action_values = self.qnetwork_local(state) # Compute Q values
 		self.qnetwork_local.train()  # Set PyTorch module in training mode
 
+		# TODO temporary removed
 		# Epsilon-greedy action selection
-		if random.random() > eps:
-			return np.argmax(action_values.cpu().data.numpy())  # Select action with max value
-		else:
-			return random.choice(np.arange(self.action_space))
+		# if random.random() > eps:
+		# 	return np.argmax(action_values.cpu().data.numpy())  # Select action with max value
+		# else:
+		# 	return random.choice(np.arange(self.action_space))
+		return action_values[0][1]
 
 	def learn(self, experiences, gamma):
 

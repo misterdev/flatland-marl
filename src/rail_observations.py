@@ -144,7 +144,7 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		if network_action == 1:  # Go
 			# print("Advancing", a)
-			action = self.predictor.get_shortest_path_action(a)  # TODO Add alternative paths
+			action = self.predictor.get_shortest_path_action(a)
 			bitmaps[a, :, 0] = 0
 			bitmaps[a] = np.roll(bitmaps[a], -1)
 			# Find next rail and dir

@@ -112,7 +112,7 @@ def main(args):
 			for a in range(env.get_num_agents()):
 				# If two first consecutive bits in the bitmap are the same
 				if np.all(maps[a, :, 0] == maps[a, :, 1]):
-					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
+					obs = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
 					buffer_obs[a] = obs.copy()
 					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
 					action = obs_builder.predictor.get_shortest_path_action(a)
@@ -121,22 +121,30 @@ def main(args):
 				else: # Changing rails - need to perform a move
 					# TODO generate alt bitmaps:
 					
-					# alt_bitmaps = []
-					# for bitmap in alt_bitmaps:
-					# Let the network choose the action : current random_move()
+					altmaps, altpaths = obs_builder.get_altmaps(a)
+					net_acts = [None] * len(altmaps)
+					for i in range(len(altmaps)):
+						obs = preprocess_obs(a, altmaps[i], maps, max_conflicting_agents, max_rails)
+						net_acts[i] = dqn.act(obs)
+					
+					best_i = 0
+					network_action = 1 # TODO
+					if len(altmaps) > 0:
+						for i in range(len(net_acts)):
+							if net_acts[i] > net_acts[best_i]:
+								best_i = i
 
-
+						maps[a, :, :] = altmaps[best_i]
+						obs_builder.predictor.shortest_paths[a] = altpaths[best_i]
 					update_values[a] = True
-					# TODO modify this to take it as parameter
-					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
+					# obs = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
 					# Save current state in buffer
 					buffer_obs[a] = obs.copy()
-					# TODO store and choose higher one	
-					network_action = dqn.act(obs) # Network chooses action
+					# network_action = dqn.act(obs) # Network chooses action
 					# Add code to handle bitmap ...
 					action, maps = obs_builder.update_bitmaps(a, network_action, maps)
 
-					next_obs[a] = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
+					next_obs[a] = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
 				network_action_dict.update({a: network_action})
 				railenv_action_dict.update({a: action})
 
