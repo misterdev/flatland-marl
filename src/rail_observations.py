@@ -115,12 +115,18 @@ class RailObsForRailEnv(ObservationBuilder):
 		observations = {}
 		return observations
 	
-	def get_alt_bitmaps(self, handle):
+	def get_altmaps(self, handle):
+		# paths = self.predictor.get_altpaths(a)
+		
+		# altmaps = np.zeros(len(paths), rails, max_depth + 1)
+		# for path in paths:
+		# 	altmaps[i] = _get_bitmap(handle, path)
+		# return altmaps, paths
 		return True
 
 	def get_bitmaps(self, print):
 		"""
-		Getter for initial bitmaps.
+		Getter for bitmaps
 		:return: 
 		"""
 		if print:
@@ -134,7 +140,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		return self.bitmaps
 
 	def update_bitmaps(self, a, network_action, bitmaps):
-
 		current_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
 		current_dir = bitmaps[a, current_rail, 0]
 

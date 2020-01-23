@@ -71,6 +71,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             elif agent.status == RailAgentStatus.DONE:
                 agent_virtual_position = agent.target
             else:  # agent.status == DONE_REMOVED, prediction must be None
+                # TODO don't recalculate every time
                 prediction = np.zeros(shape=(self.max_depth + 1, 5))
                 for i in range(self.max_depth + 1):
                     prediction[i] = [i, None, None, None, None]
@@ -121,6 +122,18 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
 
         return prediction_dict
 
+
+    def prediction_from_path(self, path, handle):
+        return True
+
+    def cells_seq_from_prediction(self, handle, prediction_dict):
+        cells_sequence = []
+        for step in prediction_dict:
+            cell_pos = (step[1], step[2])  # Takes (yi, xi)
+            cells_sequence.append(cell_pos)
+
+        return cells_sequence
+
     def compute_cells_sequence(self, prediction_dict):
         """
         Given prediction dict for all agents, return sequence of cells walked in the prediction as a dict
@@ -133,9 +146,8 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         cells_sequence = defaultdict(list)
         agents = self.env.agents
         for a in agents:
-            for step in prediction_dict[a.handle]:
-                cell_pos = (step[1], step[2])  # Takes (yi, xi)
-                cells_sequence[a.handle].append(cell_pos)
+            handle = a.handle
+            cells_sequence[handle] = self.cells_seq_from_prediction(handle, prediction_dict[handle])
 
         return cells_sequence
 

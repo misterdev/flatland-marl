@@ -21,6 +21,7 @@ from src.rail_observations import RailObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
 from flatland.envs.rail_env import RailEnvActions
 
+from src.utils.shortest_path import get_altpaths
 from src.preprocessing import preprocess_obs
 from src.agent import DQNAgent
 
@@ -110,6 +111,8 @@ def main(args):
 		for step in range(max_steps - 1):
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
+				# TODO $HERE
+				alt_maps = get_altpaths(a, env.distance_map, 500, obs_builder.cell_to_id_node)
 				# If two first consecutive bits in the bitmap are the same
 				if np.all(maps[a, :, 0] == maps[a, :, 1]):
 					obs = preprocess_obs(a, maps, max_conflicting_agents, max_rails)
@@ -120,7 +123,6 @@ def main(args):
 					maps = obs_builder.unroll_bitmap(a)
 				else: # Changing rails - need to perform a move
 					# TODO generate alt bitmaps:
-					# alt_maps = obs_builder.get_
 					
 					# alt_bitmaps = []
 					# for bitmap in alt_bitmaps:
