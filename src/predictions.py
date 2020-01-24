@@ -50,8 +50,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         np.array
             Returns a dictionary indexed by the agent handle and for each agent a vector of (max_depth + 1)x5 elements:
             - time_offset
-            - position axis 0
-            - position axis 1
+            - position (x, y)
             - direction
             - action taken to come here - must be implemented TODO
             The prediction at 0 is the current position, direction etc.
@@ -173,7 +172,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         """
 
         agent = self.env.agents[handle]
-
+        
         if agent.status == RailAgentStatus.READY_TO_DEPART:
             action = RailEnvActions.MOVE_FORWARD
 
@@ -183,15 +182,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
                 action = RailEnvActions.STOP_MOVING
             else:
                 step = self.shortest_paths[handle][0]
-                next_action_element = step[2][0]  # Get next_action_element
-
-                # Just to use the correct form/name
-                if next_action_element == 1:
-                    action = RailEnvActions.MOVE_LEFT
-                elif next_action_element == 2:
-                    action = RailEnvActions.MOVE_FORWARD
-                elif next_action_element == 3:
-                    action = RailEnvActions.MOVE_RIGHT
+                action = step[2][0]  # Get next_action_element
 
         else:  # If status == DONE
             action = RailEnvActions.DO_NOTHING

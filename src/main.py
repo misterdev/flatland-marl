@@ -119,8 +119,6 @@ def main(args):
 					network_action = 1
 					maps = obs_builder.unroll_bitmap(a)
 				else: # Changing rails - need to perform a move
-					# TODO generate alt bitmaps:
-					
 					altmaps, altpaths = obs_builder.get_altmaps(a)
 					net_acts = [None] * len(altmaps)
 					for i in range(len(altmaps)):
@@ -150,6 +148,7 @@ def main(args):
 
 			# Obs is computed from bitmaps while state is computed from env step (temporarily)
 			_, reward, done, info = env.step(railenv_action_dict)  # Env step
+			print(railenv_action_dict)
 
 
 			if args.render:

@@ -104,17 +104,17 @@ class RailObsForRailEnv(ObservationBuilder):
 		:param handles: 
 		:return: 
 		"""
-		self.prediction_dict = self.predictor.get()
-		self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
 		
-		# Compute initial bitmaps from shortest path
+		# Compute bitmaps from shortest paths
 		if self.recompute_bitmap:
+			self.prediction_dict = self.predictor.get()
+			self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
 			self.bitmaps = self._get_many_bitmap(handles=[a for a in range(self.env.get_num_agents())])
 			self.recompute_bitmap = False
 		
 		observations = {}
 		return observations
-	
+
 	def get_altmaps(self, handle):
 		altpaths, cells_seqs = self.predictor.get_altpaths(handle, self.cell_to_id_node)
 		bitmaps = []
