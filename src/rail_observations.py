@@ -10,6 +10,7 @@ from flatland.core.env import Environment
 from flatland.core.env_observation_builder import ObservationBuilder
 from flatland.core.grid.grid4_utils import get_new_position, direction_to_point
 from flatland.envs.rail_env import RailEnvActions
+from flatland.envs.agent_utils import RailAgentStatus
 
 import src.utils.debug as debug
 
@@ -116,27 +117,54 @@ class RailObsForRailEnv(ObservationBuilder):
 		return observations
 
 	def get_altmaps(self, handle):
-		altpaths, cells_seqs = self.predictor.get_altpaths(handle, self.cell_to_id_node)
+		predictions, cells_seqs = self.predictor.get_altpaths(handle, self.cell_to_id_node)
 		bitmaps = []
 		for seq in cells_seqs:
 			bitmaps.append(self._bitmap_from_cells_seq(handle, seq))
 
-		return bitmaps, altpaths
+		return bitmaps, predictions
 
-	def get_bitmaps(self, print):
+	def get_initial_bitmaps(self, print):
 		"""
 		Getter for bitmaps
 		:return: 
 		"""
+		bitmaps = np.roll(self.bitmaps, 1)
+		bitmaps[:, :, 0] = 0
+
 		if print:
 			debug.print_rails(self.env.height, self.env.height, self.id_node_to_cell, self.id_edge_to_cells)
 			debug.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
-		return self.bitmaps
+		return bitmaps
 
 	def unroll_bitmap(self, handle):
 		self.bitmaps[handle, :, 0] = 0
 		self.bitmaps[handle] = np.roll(self.bitmaps[handle], -1)
 		return self.bitmaps
+
+
+	def get_agent_action(self, handle):
+		agent = self.env.agents[handle]
+		
+		if agent.status == RailAgentStatus.READY_TO_DEPART:
+			action = RailEnvActions.MOVE_FORWARD
+
+		elif agent.status == RailAgentStatus.ACTIVE:
+			# This can return None when rails are disconnected or there was an error in the DistanceMap
+			if self.prediction_dict[handle] is None:  # Railway disrupted
+				#TODO check if is None when rail disrupted
+				action = RailEnvActions.STOP_MOVING
+			else:
+				# Get action
+				action = self.prediction_dict[handle][0][4]
+				# Consume prediction
+				self.prediction_dict[handle] = self.prediction_dict[handle][1:]
+
+		else:  # If status == DONE
+			action = RailEnvActions.DO_NOTHING
+
+		print(handle, action)
+		return action
 
 	def update_bitmaps(self, a, network_action, bitmaps):
 		current_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
@@ -144,7 +172,7 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		if network_action == 1:  # Go
 			# print("Advancing", a)
-			action = self.predictor.get_shortest_path_action(a)
+			action = self.get_agent_action(a)
 			bitmaps[a, :, 0] = 0
 			bitmaps[a] = np.roll(bitmaps[a], -1)
 			# Find next rail and dir
@@ -171,6 +199,7 @@ class RailObsForRailEnv(ObservationBuilder):
 							delay = tt + int(1 / self.env.agents[a].speed_data['speed']) - t_time
 							bitmaps[a] = np.roll(bitmaps[a], delay)
 							bitmaps[a, new_rail, 0:delay] = new_dir
+							print("Train {} delayed of {}".format(a, delay))
 						# print("Following {} with delay {}".format(lt, delay))
 						#else:
 						#	print("Following {} with no delay".format(lt))
@@ -190,7 +219,6 @@ class RailObsForRailEnv(ObservationBuilder):
 						delay = first_time + ospeed - oe
 						bitmaps[ot] = np.roll(bitmaps[ot], delay)
 						bitmaps[ot, current_rail, 0:delay] = current_dir
-						# print("Train {} delayed of {}".format(ot, delay))
 						first_time += ospeed
 
 		return action, bitmaps
@@ -211,7 +239,6 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		# Add 0 at first ts - for 'not departed yet'
 		rail, _ = self.get_edge_from_cell(path[0])
-		bitmap[rail, 0] = 0 # TODO così mi perdo il target? forse devo avere target + 2?
 
 		# Agent's cardinal node, where it entered the last edge
 		agent_entry_node = None
@@ -247,7 +274,8 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		count = 0 # TODO better name: remaining_switches
 		# Fill rail occupancy according to predicted position at ts
-		for ts in range(1, len(path)):
+
+		for ts in range(0, len(path)):
 			cell = path[ts]
 			# Find rail associated to cell
 			rail, _ = self.get_edge_from_cell(cell)

@@ -50,9 +50,10 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         np.array
             Returns a dictionary indexed by the agent handle and for each agent a vector of (max_depth + 1)x5 elements:
             - time_offset
-            - position (x, y)
+            - position x
+            - position y
             - direction
-            - action taken to come here - must be implemented TODO
+            - action taken to come here
             The prediction at 0 is the current position, direction etc.
         """
         agents = self.env.agents
@@ -73,15 +74,17 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
     def get_altpaths(self, handle, cell_to_id_node):
         altpaths = get_altpaths(handle, self.env.distance_map, 500, cell_to_id_node)
         cells_seqs = []
+        predictions = []
         for path in altpaths:
             prediction = self.prediction_from_path(handle, path)
+            predictions.append(prediction)
             cells_seqs.append(self.cells_seq_from_prediction(handle, prediction))
         
-        return altpaths, cells_seqs
+        return predictions, cells_seqs 
 
     def prediction_from_path(self, handle, path):
         agent = self.env.agents[handle]
-        prediction = np.zeros(shape=(self.max_depth + 1, 5))
+        prediction = np.zeros(shape=(self.max_depth + 1, 5), dtype=int)
 
         if agent.status == RailAgentStatus.READY_TO_DEPART:
             agent_virtual_position = agent.initial_position
@@ -97,7 +100,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         times_per_cell = int(np.reciprocal(agent_speed))
         # First cell is info relative to actual time step
         prediction[0] = [0, *agent_virtual_position,
-                            agent_virtual_direction, 0]
+                            agent_virtual_direction, RailEnvActions.MOVE_FORWARD] # TODO dell'action
 
         # If there is a shortest path, remove the initial position
         if path:
@@ -107,6 +110,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
         new_position = agent_virtual_position
         visited = OrderedSet()
         for index in range(1, self.max_depth + 1):
+            action = RailEnvActions.MOVE_FORWARD
             # If we're at the target or not moving, stop moving until max_depth is reached
             # if new_position == agent.target or not agent.moving or not path:
             # Writing like this you don't consider the fact that the agent is stopped
@@ -117,14 +121,15 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
                 continue
 
             if index % times_per_cell == 0:
-
                 new_position = path[0].position
                 new_direction = path[0].direction
+
+                action = path[0][2].action
 
                 path = path[1:]
 
             # Prediction is ready
-            prediction[index] = [index, *new_position, new_direction, 0]
+            prediction[index] = [index, *new_position, new_direction, action]
             visited.add((*new_position, new_direction))
 
         return prediction
