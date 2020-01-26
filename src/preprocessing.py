@@ -29,9 +29,6 @@ def choose_subset(handle, bitmaps, max_num):
     num_steps = bitmaps.shape[2]
     conflicts_per_agents = {a: 0 for a in range(num_agents)} # Add here count of conflicts per agent
     # Find 'most' conflicting agents - naive way
-    # Debug
-    #for a in range(num_agents):
-        #print(bitmaps[a, :, :])
     for ts in range(1, num_steps):
         rail_ts = np.argmax(np.absolute(bitmaps[handle, : , ts])) # Find agent current rail
         handle_dir_ts = bitmaps[handle, rail_ts, ts] # Find current direction on this rail
@@ -60,8 +57,6 @@ def get_heatmap(handle, bitmaps, max_rails):
     # image = neg_dir.astype(float) / np.max(neg_dir)
     # plt.imshow(image)
     # plt.show()
-
-# 46 x 501 x 3
 
 def preprocess_obs(handle, bitmap, maps, max_conflicting_agents, max_rails):
     """

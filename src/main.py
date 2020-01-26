@@ -102,7 +102,7 @@ def main(args):
 		state, info = env.reset()
 		if args.render:
 			env_renderer.reset()
-		maps = obs_builder.get_bitmaps(args.print)
+		maps = obs_builder.get_initial_bitmaps(args.print)
 
 		if args.print:
 			debug.print_bitmaps(maps)
@@ -115,25 +115,29 @@ def main(args):
 					obs = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
 					buffer_obs[a] = obs.copy()
 					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
-					action = obs_builder.predictor.get_shortest_path_action(a)
+					action = obs_builder.get_agent_action(a) #.predictor.get_shortest_path_action(a)
 					network_action = 1
 					maps = obs_builder.unroll_bitmap(a)
 				else: # Changing rails - need to perform a move
-					altmaps, altpaths = obs_builder.get_altmaps(a)
-					net_acts = [None] * len(altmaps)
-					for i in range(len(altmaps)):
-						obs = preprocess_obs(a, altmaps[i], maps, max_conflicting_agents, max_rails)
-						net_acts[i] = dqn.act(obs)
-					
-					best_i = 0
-					network_action = 1 # TODO
-					if len(altmaps) > 0:
-						for i in range(len(net_acts)):
-							if net_acts[i] > net_acts[best_i]:
-								best_i = i
+					""" altmaps, predictions = obs_builder.get_altmaps(a)
 
-						maps[a, :, :] = altmaps[best_i]
-						obs_builder.predictor.shortest_paths[a] = altpaths[best_i]
+					if len(altmaps) > 1:
+						net_acts = [None] * len(altmaps)
+						for i in range(len(altmaps)):
+							obs = preprocess_obs(a, altmaps[i], maps, max_conflicting_agents, max_rails)
+							net_acts[i] = dqn.act(obs)
+						
+						best_i = 0
+						if len(altmaps) > 0: # TODO
+							for i in range(len(net_acts)):
+								if net_acts[i] > net_acts[best_i]:
+									best_i = i
+
+							maps[a, :, :] = altmaps[best_i]
+							obs_builder.prediction_dict[a] = predictions[best_i] """
+
+					network_action = 1 # TODO
+					obs = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
 					update_values[a] = True
 					# obs = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
 					# Save current state in buffer
@@ -148,8 +152,6 @@ def main(args):
 
 			# Obs is computed from bitmaps while state is computed from env step (temporarily)
 			_, reward, done, info = env.step(railenv_action_dict)  # Env step
-			print(railenv_action_dict)
-
 
 			if args.render:
 				env_renderer.render_env(show=True, show_observations=False, show_predictions=True)
