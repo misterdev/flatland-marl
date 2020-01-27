@@ -150,7 +150,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.bitmaps[handle] = np.roll(self.bitmaps[handle], -1)
 		return self.bitmaps
 
-
 	def get_agent_action(self, handle):
 		agent = self.env.agents[handle]
 		
@@ -173,9 +172,33 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		return action
 
+	def delay(self, handle, bitmaps, rail, direction, delay):
+		bitmaps[handle] = np.roll(bitmaps[handle], delay)
+		bitmaps[handle, rail, 0:delay] = direction
+		# TODO this doesn't updates the timestep
+		steps = np.repeat([self.prediction_dict[handle][0]], [delay], axis=0)
+		self.prediction_dict[handle] = np.concatenate((steps, self.prediction_dict[handle]))
+		# print("Train {} delayed of {}".format(handle, delay))
+		return bitmaps
+
+	def delay_schedule(self, handle, bitmaps, rail, direction):
+		action = RailEnvActions.STOP_MOVING
+		if bitmaps[handle, rail, 0] != 0:  # If agent is active
+			others = self._get_trains_on_rails(bitmaps, rail, handle)
+			# print("Other trains on rail {}: {}".format(rail, others))
+			first_time = 1
+			for other in others:
+				o, o_exit = other  #  other train (id), other exit,
+				o_speed = int(1 / self.env.agents[o].speed_data['speed'])
+				if o_exit < first_time + o_speed:
+					delay = first_time + o_speed - o_exit
+					bitmaps = self.delay(o, bitmaps, rail, direction, delay)
+					first_time += o_speed
+		return bitmaps
+
 	def update_bitmaps(self, a, network_action, bitmaps):
-		current_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
-		current_dir = bitmaps[a, current_rail, 0]
+		curr_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
+		curr_dir = bitmaps[a, curr_rail, 0]
 
 		if network_action == 1:  # Go
 			# print("Advancing", a)
@@ -183,52 +206,32 @@ class RailObsForRailEnv(ObservationBuilder):
 			bitmaps[a, :, 0] = 0
 			bitmaps[a] = np.roll(bitmaps[a], -1)
 			# Find next rail and dir
-			new_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
-			new_dir = bitmaps[a, new_rail, 0]
+			next_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
+			next_dir = bitmaps[a, next_rail, 0]
 
-			if bitmaps[a, new_rail, 0] == 0:
+			if bitmaps[a, next_rail, 0] == 0:
 				print("Train {} has reached its target".format(a))
 			else:
-				# print("Train {} now on rail {} in direction {}".format(a, new_rail, new_dir))
+				# print("Train {} now on rail {} in direction {}".format(a, next_rail, next_dir))
 				# Check if rail is already occupied - to compute new exit time
-				lt, tt = self._last_train_on_rail(bitmaps, new_rail, a)
-				if tt > 0:
-					ca_dir = bitmaps[lt, new_rail, 0]
-					if not ca_dir == new_dir:
-						print("{} CRASH with {}".format(a, lt))
-						# print("Undo move")
-						action = RailEnvActions.STOP_MOVING  # alternative ??
+				last, last_exit = self._last_train_on_rail(bitmaps, next_rail, a)
+				if last_exit > 0:
+					last_dir = bitmaps[last, next_rail, 0]
+					if last_dir != next_dir:
+						print("{} CRASH with {}".format(a, last))
+						bitmaps = self.delay_schedule(a, bitmaps, curr_rail, curr_dir)
 						# TODO! hai appena consumato una action dal predictor
-						# TODO! hai detto al treno di fermarsi e non si e' fermato
+						# TODO! hai delast_exito al treno di fermarsi e non si e' fermato
 						bitmaps[a] = np.roll(bitmaps[a], 1)
-						bitmaps[a, current_rail, 0] = current_dir
+						bitmaps[a, curr_rail, 0] = curr_dir
 					else:
-						t_time = np.argmax(bitmaps[a, new_rail, :] == 0)
-						if t_time <= tt:
-							delay = tt + int(1 / self.env.agents[a].speed_data['speed']) - t_time
-							# bitmaps[a] = np.roll(bitmaps[a], delay)
-							# bitmaps[a, new_rail, 0:delay] = new_dir
-							# print("Train {} delayed of {}".format(a, delay))
-						# print("Following {} with delay {}".format(lt, delay))
-						#else:
-						#	print("Following {} with no delay".format(lt))
-				#else:
-				#	print("New rail is free")
+						t_time = np.argmax(bitmaps[a, next_rail, :] == 0)
+						if t_time <= last_exit:
+							delay = last_exit + int(1 / self.env.agents[a].speed_data['speed']) - t_time
+							bitmaps = self.delay(a, bitmaps, next_rail, next_dir, delay)
 		else:
 			# print("Waiting")
-			action = RailEnvActions.STOP_MOVING
-			if not bitmaps[a, current_rail, 0] == 0:  # If agent is active
-				others = self._all_trains_on_rails(bitmaps, current_rail, a)
-				# print("Other trains on rail {}: {}".format(current_rail, others))
-				first_time = 1
-				for other in others:
-					oe, ot = other  # Other exit, other train (id)
-					ospeed = int(1 / self.env.agents[ot].speed_data['speed'])
-					if oe < first_time + ospeed:
-						delay = first_time + ospeed - oe
-						# bitmaps[ot] = np.roll(bitmaps[ot], delay)
-						# bitmaps[ot, current_rail, 0:delay] = current_dir
-						# first_time += ospeed
+			bitmaps = self.delay_schedule(a, bitmaps, curr_rail, curr_dir)
 
 		return action, bitmaps
 
@@ -341,16 +344,16 @@ class RailObsForRailEnv(ObservationBuilder):
 		:param handle: 
 		:return: 
 		"""
-		ft, tt = 0, 0 # Final train, its expected exit time
+		l, l_exit = 0, 0 # Final train, its expected exit time
 		
 		for a in range(self.env.get_num_agents()):
 			if not maps[a, rail, 0] == 0 and not a == handle:
 				it = np.argmax(maps[a, rail, :] == 0)
-				if it > tt: # If exit time of train a > my exit time
-					ft, tt = a, it
-		return ft, tt
+				if it > l_exit: # If exit time of train a > my exit time
+					l, l_exit = a, it
+		return l, l_exit
 	
-	def _all_trains_on_rails(self, maps, rail, handle):
+	def _get_trains_on_rails(self, maps, rail, handle):
 		"""
 
 		:param maps: 
@@ -362,7 +365,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		for a in range(self.env.get_num_agents()):
 			if not (maps[a, rail, 0] == 0 or a == handle):
 				expected_exit_time = np.argmax(maps[a, rail, :] == 0) # Takes index/ts of last bit in a row
-				all_trains.append((expected_exit_time, a))
+				all_trains.append((a, expected_exit_time))
 		all_trains.sort()
 		
 		return all_trains
