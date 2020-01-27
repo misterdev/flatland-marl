@@ -119,8 +119,17 @@ class RailObsForRailEnv(ObservationBuilder):
 	def get_altmaps(self, handle):
 		predictions, cells_seqs = self.predictor.get_altpaths(handle, self.cell_to_id_node)
 		bitmaps = []
-		for seq in cells_seqs:
-			bitmaps.append(self._bitmap_from_cells_seq(handle, seq))
+		for i in range(len(cells_seqs)):
+			bitmap = self._bitmap_from_cells_seq(handle, cells_seqs[i])
+			# We should have only 1
+			steps = int(1 / self.env.agents[handle].speed_data['speed']) - 1
+			if ( steps > 0):
+				for s in range(steps):
+					bitmap[:, 0] = 0
+					bitmap = np.roll(bitmap, -1)
+					predictions[i] = predictions[i][1:]
+
+			bitmaps.append(bitmap)
 
 		return bitmaps, predictions
 
@@ -131,7 +140,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		"""
 		bitmaps = np.roll(self.bitmaps, 1)
 		bitmaps[:, :, 0] = 0
-
 		if print:
 			debug.print_rails(self.env.height, self.env.height, self.id_node_to_cell, self.id_edge_to_cells)
 			debug.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
@@ -163,7 +171,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		else:  # If status == DONE
 			action = RailEnvActions.DO_NOTHING
 
-		print(handle, action)
 		return action
 
 	def update_bitmaps(self, a, network_action, bitmaps):
@@ -191,15 +198,17 @@ class RailObsForRailEnv(ObservationBuilder):
 						print("{} CRASH with {}".format(a, lt))
 						# print("Undo move")
 						action = RailEnvActions.STOP_MOVING  # alternative ??
+						# TODO! hai appena consumato una action dal predictor
+						# TODO! hai detto al treno di fermarsi e non si e' fermato
 						bitmaps[a] = np.roll(bitmaps[a], 1)
 						bitmaps[a, current_rail, 0] = current_dir
 					else:
 						t_time = np.argmax(bitmaps[a, new_rail, :] == 0)
 						if t_time <= tt:
 							delay = tt + int(1 / self.env.agents[a].speed_data['speed']) - t_time
-							bitmaps[a] = np.roll(bitmaps[a], delay)
-							bitmaps[a, new_rail, 0:delay] = new_dir
-							print("Train {} delayed of {}".format(a, delay))
+							# bitmaps[a] = np.roll(bitmaps[a], delay)
+							# bitmaps[a, new_rail, 0:delay] = new_dir
+							# print("Train {} delayed of {}".format(a, delay))
 						# print("Following {} with delay {}".format(lt, delay))
 						#else:
 						#	print("Following {} with no delay".format(lt))
@@ -217,9 +226,9 @@ class RailObsForRailEnv(ObservationBuilder):
 					ospeed = int(1 / self.env.agents[ot].speed_data['speed'])
 					if oe < first_time + ospeed:
 						delay = first_time + ospeed - oe
-						bitmaps[ot] = np.roll(bitmaps[ot], delay)
-						bitmaps[ot, current_rail, 0:delay] = current_dir
-						first_time += ospeed
+						# bitmaps[ot] = np.roll(bitmaps[ot], delay)
+						# bitmaps[ot, current_rail, 0:delay] = current_dir
+						# first_time += ospeed
 
 		return action, bitmaps
 

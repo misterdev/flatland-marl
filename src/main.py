@@ -119,7 +119,7 @@ def main(args):
 					network_action = 1
 					maps = obs_builder.unroll_bitmap(a)
 				else: # Changing rails - need to perform a move
-					""" altmaps, predictions = obs_builder.get_altmaps(a)
+					altmaps, predictions = obs_builder.get_altmaps(a)
 
 					if len(altmaps) > 1:
 						net_acts = [None] * len(altmaps)
@@ -134,7 +134,7 @@ def main(args):
 									best_i = i
 
 							maps[a, :, :] = altmaps[best_i]
-							obs_builder.prediction_dict[a] = predictions[best_i] """
+							obs_builder.prediction_dict[a] = predictions[best_i]
 
 					network_action = 1 # TODO
 					obs = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
