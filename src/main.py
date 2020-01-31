@@ -35,10 +35,12 @@ def main(args):
 	                                       )
 
 	# Maps speeds to % of appearance in the env
-	speed_ration_map = {1.: 0.25,  # Fast passenger train
-	                    1. / 2.: 0.25,  # Fast freight train
-	                    1. / 3.: 0.25,  # Slow commuter train
-	                    1. / 4.: 0.25}  # Slow freight train
+	# TODO! temporary set all speed to 1
+	speed_ration_map = {1.: 1}  # Slow freight train
+	# speed_ration_map = {1.: 0.25,  # Fast passenger train
+	#                     1. / 2.: 0.25,  # Fast freight train
+	#                     1. / 3.: 0.25,  # Slow commuter train
+	#                     1. / 4.: 0.25}  # Slow freight train
 
 	schedule_generator = sparse_schedule_generator(speed_ration_map)
 	
@@ -69,7 +71,6 @@ def main(args):
 			screen_width=1920)
 
 	max_rails = 100 # TODO Must be a parameter of the env (estimated)
-	max_conflicting_agents = 4 # TODO Decide subset of agents to feed
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
 	max_steps = 100
 	
@@ -80,7 +81,6 @@ def main(args):
 		if file:
 			dqn.qnetwork_local.load_state_dict(torch.load(file))
 			
-		
 	eps = 1.
 	eps_end = 0.005
 	railenv_action_dict = {}
@@ -93,13 +93,11 @@ def main(args):
 	buffer_obs = [None] * args.num_agents
 	next_obs = [None] * args.num_agents
 
-
 	############ Main loop
 	for ep in range(args.num_episodes):
-
 		score = 0
 		env_done = 0
-		state, info = env.reset()
+		_, info = env.reset()
 		if args.render:
 			env_renderer.reset()
 		maps = obs_builder.get_initial_bitmaps(args.print)
@@ -110,47 +108,71 @@ def main(args):
 		for step in range(max_steps - 1):
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
+				network_action = None
+				# TODO evaluate only once
+				agent_speed = env.agents[a].speed_data["speed"]
+				times_per_cell = int(np.reciprocal(agent_speed))
 				# If two first consecutive bits in the bitmap are the same
-				if np.all(maps[a, :, 0] == maps[a, :, 1]):
-					obs = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
+				if np.all(maps[a, :, 0] == maps[a, :, times_per_cell]) or not info['action_required'][a]:
+					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
 					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
-					action = obs_builder.get_agent_action(a) #.predictor.get_shortest_path_action(a)
+					
 					network_action = 1
 					maps = obs_builder.unroll_bitmap(a)
+					action = obs_builder.get_agent_action(a)
+
 				else: # Changing rails - need to perform a move
+					# TODO check how this works with new action pick mehanic
 					altmaps, predictions = obs_builder.get_altmaps(a)
 
 					if len(altmaps) > 1:
-						net_acts = [None] * len(altmaps)
+						q_values = np.array([])
 						for i in range(len(altmaps)):
-							obs = preprocess_obs(a, altmaps[i], maps, max_conflicting_agents, max_rails)
-							net_acts[i] = dqn.act(obs)
-						
-						best_i = 0
-						if len(altmaps) > 0: # TODO
-							for i in range(len(net_acts)):
-								if net_acts[i] > net_acts[best_i]:
-									best_i = i
+							obs = preprocess_obs(a, altmaps[i], maps, max_rails)
+							q_values = np.concatenate([q_values, dqn.act(obs)])
 
-							maps[a, :, :] = altmaps[best_i]
-							obs_builder.prediction_dict[a] = predictions[best_i]
+						# Epsilon-greedy action selection
+						if np.random.random() > eps:
+							argmax = np.argmax(q_values)
+							network_action = argmax % 2
+							best_i = argmax // 2
+						else:
+							network_action = np.random.choice([0, 1])
+							best_i = np.random.choice(np.arange(len(altmaps)))
 
-					network_action = 1 # TODO
-					obs = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
+						# Update bitmaps and predictions
+						maps[a, :, :] = altmaps[best_i]
+						obs_builder.prediction_dict[a] = predictions[best_i]
+					
+					else: # Continue on the same path
+						q_values = dqn.act(obs) # Network chooses action
+						if np.random.random() > eps:
+							network_action = np.argmax(q_values)
+						else:
+							network_action = np.random.choice([0, 1])	
+
+					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					update_values[a] = True
-					# obs = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
 					# Save current state in buffer
 					buffer_obs[a] = obs.copy()
-					# network_action = dqn.act(obs) # Network chooses action
-					# Add code to handle bitmap ...
-					action, maps = obs_builder.update_bitmaps(a, network_action, maps)
+					# Update bitmaps and get new action
+					# TODO? detect crash function
+					# TODO? get_action function
+					action, maps, crash = obs_builder.update_bitmaps(a, network_action, maps)
 
-					next_obs[a] = preprocess_obs(a, maps[a], maps, max_conflicting_agents, max_rails)
+					if args.train and crash:
+						network_action = 0 # TODO! are you sure?
+						print('ADDING CRASH TUPLE')
+						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
+
+					next_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
+
 				network_action_dict.update({a: network_action})
 				railenv_action_dict.update({a: action})
 
 			# Obs is computed from bitmaps while state is computed from env step (temporarily)
+			# TODO? return bitmaps as state?
 			_, reward, done, info = env.step(railenv_action_dict)  # Env step
 
 			if args.render:
@@ -175,14 +197,15 @@ def main(args):
 					if update_values[a] or done[a]:
 						dqn.step(buffer_obs[a], network_action_dict[a], reward[a], next_obs[a], done[a])
 						buffer_obs[a] = next_obs[a].copy()
-				
+			
 			for a in range(env.get_num_agents()):	
 				score += reward[a] / env.get_num_agents() # Update score
 				
 			if done['__all__']:
 				env_done = 1
 				break
-		################### At the end of the episode
+
+		################### End of the episode
 		eps = max(eps_end, args.eps_decay * eps)  # Decrease epsilon
 		# Metrics
 		done_window.append(env_done)
