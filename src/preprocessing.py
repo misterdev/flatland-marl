@@ -58,7 +58,9 @@ def get_heatmap(handle, bitmaps, max_rails):
     # plt.imshow(image)
     # plt.show()
 
-def preprocess_obs(handle, bitmap, maps, max_conflicting_agents, max_rails):
+
+
+def preprocess_obs(handle, bitmap, maps, max_rails):
     """
     
     :param handle: 
