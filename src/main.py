@@ -17,10 +17,10 @@ from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.schedule_generators import sparse_schedule_generator
 from flatland.envs.malfunction_generators import malfunction_from_params
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
-from src.rail_observations import RailObsForRailEnv
-from src.predictions import ShortestPathPredictorForRailEnv
 from flatland.envs.rail_env import RailEnvActions
 
+from src.rail_observations import RailObsForRailEnv
+from src.predictions import ShortestPathPredictorForRailEnv
 from src.preprocessing import preprocess_obs
 from src.agent import DQNAgent
 
