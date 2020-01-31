@@ -7,4 +7,5 @@ bot_config.txt
 src/nets
 *.png
 *.pyc
+checkpoints/
 temp/

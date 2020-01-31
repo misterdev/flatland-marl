@@ -65,13 +65,12 @@ def preprocess_obs(handle, bitmap, maps, max_rails):
     
     :param handle: 
     :param bitmaps: 
-    :param max_conflicting_agents: 
     :param max_rails: 
     :return: 
     """
     # Select subset of conflicting paths in bitmap
     pos_dir, neg_dir = get_heatmap(handle, maps, max_rails)
-    # state = choose_subset(handle, bitmaps, max_conflicting_agents)
+
     state = np.concatenate([
         fill_padding(bitmap, max_rails),
         fill_padding(pos_dir, max_rails),
