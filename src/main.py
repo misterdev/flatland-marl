@@ -119,8 +119,8 @@ def main(args):
 					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
 					
 					network_action = 1
-					maps = obs_builder.unroll_bitmap(a)
 					action = obs_builder.get_agent_action(a)
+					maps = obs_builder.unroll_bitmap(a, maps)
 
 				else: # Changing rails - need to perform a move
 					# TODO check how this works with new action pick mehanic
@@ -132,7 +132,7 @@ def main(args):
 						for i in range(len(altmaps)):
 							obs = preprocess_obs(a, altmaps[i], maps, max_rails)
 							altobs.append(obs)
-							q_values = np.concatenate([q_values, dqn.act(obs)])
+							q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
 
 						# Epsilon-greedy action selection
 						if np.random.random() > eps:
@@ -150,7 +150,7 @@ def main(args):
 
 					else: # Continue on the same path
 						obs = preprocess_obs(a, maps[a], maps, max_rails)
-						q_values = dqn.act(obs) # Network chooses action
+						q_values = dqn.act(obs).cpu().data.numpy() # Network chooses action
 						if np.random.random() > eps:
 							network_action = np.argmax(q_values)
 						else:

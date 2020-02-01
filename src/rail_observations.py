@@ -151,10 +151,10 @@ class RailObsForRailEnv(ObservationBuilder):
 			debug.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
 		return bitmaps
 
-	def unroll_bitmap(self, handle):
-		self.bitmaps[handle, :, 0] = 0
-		self.bitmaps[handle] = np.roll(self.bitmaps[handle], -1)
-		return self.bitmaps
+	def unroll_bitmap(self, handle, bitmaps):
+		bitmaps[handle, :, 0] = 0
+		bitmaps[handle] = np.roll(bitmaps[handle], -1)
+		return bitmaps
 
 	def get_agent_action(self, handle):
 		agent = self.env.agents[handle]
@@ -207,6 +207,17 @@ class RailObsForRailEnv(ObservationBuilder):
 		action = None
 		crash = False
 
+		agent = self.env.agents[a]
+		if agent.status == RailAgentStatus.READY_TO_DEPART:
+			is_occupied = False
+			for i in range(len(self.env.agents)):
+				if i != a and self.env.agents[i].position == agent.initial_position:
+					is_occupied = True
+			# If its initial position is occupied or he shouldn't depart 
+			if ( network_action == 1 and is_occupied) or network_action == 0:
+				action = RailEnvActions.STOP_MOVING
+				return action, bitmaps, crash
+
 		if network_action == 1:  # Go
 			# print("Advancing", a)
 			bitmaps[a, :, 0] = 0
@@ -231,10 +242,11 @@ class RailObsForRailEnv(ObservationBuilder):
 						bitmaps[a, curr_rail, 0] = curr_dir
 						action = RailEnvActions.STOP_MOVING
 					else:
-						t_time = np.argmax(bitmaps[a, next_rail, :] == 0)
-						if t_time <= last_exit:
-							delay = last_exit + int(1 / self.env.agents[a].speed_data['speed']) - t_time
+						curr_exit_time = np.argmax(bitmaps[a, next_rail, :] == 0)
+						if curr_exit_time <= last_exit:
+							delay = last_exit + int(1 / self.env.agents[a].speed_data['speed']) - curr_exit_time
 							bitmaps = self.delay(a, bitmaps, next_rail, next_dir, delay)
+
 			if action == None:
 				action = self.get_agent_action(a)
 		else:
