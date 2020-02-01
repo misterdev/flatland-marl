@@ -9,5 +9,6 @@ Check
 
 ### TODO
 - [ ] Fix any error with trains
+    - [ ] Surely add 0 if agent is not departed
 - [ ] Implement strategy to apply the action before entering last cell before a switch
 - [ ] Re-enable different train speeds

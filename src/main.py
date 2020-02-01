@@ -67,8 +67,8 @@ def main(args):
 			env,
 			agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS_AND_BOX,
 			show_debug=True,
-			screen_height=1080,
-			screen_width=1920)
+			screen_height=800,
+			screen_width=800)
 
 	max_rails = 100 # TODO Must be a parameter of the env (estimated)
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
@@ -128,8 +128,10 @@ def main(args):
 
 					if len(altmaps) > 1:
 						q_values = np.array([])
+						altobs = []
 						for i in range(len(altmaps)):
 							obs = preprocess_obs(a, altmaps[i], maps, max_rails)
+							altobs.append(obs)
 							q_values = np.concatenate([q_values, dqn.act(obs)])
 
 						# Epsilon-greedy action selection
@@ -144,15 +146,16 @@ def main(args):
 						# Update bitmaps and predictions
 						maps[a, :, :] = altmaps[best_i]
 						obs_builder.prediction_dict[a] = predictions[best_i]
-					
+						obs = altobs[best_i]
+
 					else: # Continue on the same path
+						obs = preprocess_obs(a, maps[a], maps, max_rails)
 						q_values = dqn.act(obs) # Network chooses action
 						if np.random.random() > eps:
 							network_action = np.argmax(q_values)
 						else:
 							network_action = np.random.choice([0, 1])	
 
-					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					update_values[a] = True
 					# Save current state in buffer
 					buffer_obs[a] = obs.copy()

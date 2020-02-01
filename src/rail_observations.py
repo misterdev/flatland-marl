@@ -117,17 +117,23 @@ class RailObsForRailEnv(ObservationBuilder):
 		return observations
 
 	def get_altmaps(self, handle):
+		agent = self.env.agents[handle]
 		predictions, cells_seqs = self.predictor.get_altpaths(handle, self.cell_to_id_node)
 		bitmaps = []
 		for i in range(len(cells_seqs)):
 			bitmap = self._bitmap_from_cells_seq(handle, cells_seqs[i])
 			# We should have only 1
-			steps = int(1 / self.env.agents[handle].speed_data['speed']) - 1
-			if ( steps > 0):
+			steps = int(1 / agent.speed_data['speed']) - 1
+			if steps > 0:
 				for s in range(steps):
 					bitmap[:, 0] = 0
 					bitmap = np.roll(bitmap, -1)
 					predictions[i] = predictions[i][1:]
+
+			# If agent not departed, add 0 at the beginning
+			if agent.status == RailAgentStatus.READY_TO_DEPART:
+				bitmap[:, -1] = 0
+				bitmap = np.roll(bitmap, 1)
 
 			bitmaps.append(bitmap)
 
@@ -175,7 +181,7 @@ class RailObsForRailEnv(ObservationBuilder):
 	def delay(self, handle, bitmaps, rail, direction, delay):
 		bitmaps[handle] = np.roll(bitmaps[handle], delay)
 		bitmaps[handle, rail, 0:delay] = direction
-		# TODO this doesn't updates the timestep
+		# TODO? this doesn't updates the timestep
 		steps = np.repeat([self.prediction_dict[handle][0]], [delay], axis=0)
 		self.prediction_dict[handle] = np.concatenate((steps, self.prediction_dict[handle]))
 		# print("Train {} delayed of {}".format(handle, delay))
