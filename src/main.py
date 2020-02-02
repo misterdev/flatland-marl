@@ -18,6 +18,7 @@ from flatland.envs.schedule_generators import sparse_schedule_generator
 from flatland.envs.malfunction_generators import malfunction_from_params
 from flatland.utils.rendertools import RenderTool, AgentRenderVariant
 from flatland.envs.rail_env import RailEnvActions
+from flatland.envs.agent_utils import RailAgentStatus
 
 from src.rail_observations import RailObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
@@ -109,19 +110,46 @@ def main(args):
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
 				network_action = None
+				agent = env.agents[a]
+
 				# TODO evaluate only once
-				agent_speed = env.agents[a].speed_data["speed"]
+				agent_speed = agent.speed_data["speed"]
 				times_per_cell = int(np.reciprocal(agent_speed))
 				# If two first consecutive bits in the bitmap are the same
-				if np.all(maps[a, :, 0] == maps[a, :, times_per_cell]) or not info['action_required'][a]:
+				# TODO! handle if train is arrived
+				if agent.status == RailAgentStatus.DONE:
+					# TODO? can you improve this? do i need this?
+					obs = preprocess_obs(a, maps[a], maps, max_rails)
+					buffer_obs[a] = obs.copy()
+					update_values[a] = False
+					
+					# TODO? TEMP
+					rail = np.argmax(np.absolute(maps[a, :, 0]))
+					assert abs(maps[a, rail, 0]) == 1
+
+				elif agent.status == RailAgentStatus.DONE_REMOVED:
+					# TODO? can you improve this? do i need this?
+					obs = preprocess_obs(a, maps[a], maps, max_rails)
+					buffer_obs[a] = obs.copy()
+					update_values[a] = False
+
+					network_action = 0
+					action = RailEnvActions.DO_NOTHING
+					assert(not info['action_required'][a])
+
+					# TODO? TEMP
+					maps[a, :, 0] = 0 # TODO? this should be done only once
+					rail = np.argmax(np.absolute(maps[a, :, 0]))
+					assert abs(maps[a, rail, 0]) == 0
+
+				elif np.all(maps[a, :, 0] == maps[a, :, times_per_cell]) or not info['action_required'][a]:
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
 					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
-					
+
 					network_action = 1
 					action = obs_builder.get_agent_action(a)
 					maps = obs_builder.unroll_bitmap(a, maps)
-
 				else: # Changing rails - need to perform a move
 					# TODO check how this works with new action pick mehanic
 					altmaps, predictions = obs_builder.get_altmaps(a)

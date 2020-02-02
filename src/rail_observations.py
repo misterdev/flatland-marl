@@ -229,7 +229,7 @@ class RailObsForRailEnv(ObservationBuilder):
 			if bitmaps[a, next_rail, 0] == 0:
 				print("Train {} has reached its target".format(a))
 				assert agent.position == agent.target
-				# TODO? We can assert agent.position == agent.target.position
+				# TODO! adding action_required in main, you will never come here again
 			else:
 				# Check if rail is already occupied to compute new exit time
 				last, last_exit = self._last_train_on_rail(bitmaps, next_rail, a)
