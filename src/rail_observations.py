@@ -228,6 +228,7 @@ class RailObsForRailEnv(ObservationBuilder):
 
 			if bitmaps[a, next_rail, 0] == 0:
 				print("Train {} has reached its target".format(a))
+				assert agent.position == agent.target
 				# TODO? We can assert agent.position == agent.target.position
 			else:
 				# Check if rail is already occupied to compute new exit time
@@ -305,16 +306,15 @@ class RailObsForRailEnv(ObservationBuilder):
 			agent_entry_node = CardinalNode(node_id, cp)
 
 
-		count = 0 # TODO better name: remaining_switches
+		holes = 0
 		# Fill rail occupancy according to predicted position at ts
-
 		for ts in range(0, len(path)):
 			cell = path[ts]
 			# Find rail associated to cell
 			rail, _ = self.get_edge_from_cell(cell)
 			# Find crossing direction
 			if rail == -1: # Agent is on a switch
-				count += 1
+				holes += 1
 				# Skip duplicated cells (for agents with fractional speed)
 				if cell != path[ts+1]:
 					node_id = self.cell_to_id_node[cell]
@@ -334,11 +334,11 @@ class RailObsForRailEnv(ObservationBuilder):
 
 				bitmap[rail, ts] = crossing_dir
 
-				if count > 0:
-					bitmap[rail, ts-count:ts] = crossing_dir
-					count = 0
+				if holes > 0:
+					bitmap[rail, ts-holes:ts] = crossing_dir
+					holes = 0
 
-		assert(count == 0, "All the cells of the bitmap should be filled")
+		assert(holes == 0, "All the cells of the bitmap should be filled")
 
 		temp = np.any(bitmap[:, 1:(len(path)-1)] != 0, axis=0)
 		assert(np.all(temp), "Thee agent's bitmap shouldn't have holes ")
