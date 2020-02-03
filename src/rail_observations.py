@@ -109,6 +109,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		# Compute bitmaps from shortest paths
 		if self.recompute_bitmap:
 			self.prediction_dict = self.predictor.get()
+			self.paths = self.predictor.shortest_paths
 			self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
 			self.bitmaps = self._get_many_bitmap(handles=[a for a in range(self.env.get_num_agents())])
 			self.recompute_bitmap = False
@@ -118,7 +119,7 @@ class RailObsForRailEnv(ObservationBuilder):
 
 	def get_altmaps(self, handle):
 		agent = self.env.agents[handle]
-		predictions, cells_seqs = self.predictor.get_altpaths(handle, self.cell_to_id_node)
+		altpaths, cells_seqs = self.predictor.get_altpaths(handle, self.cell_to_id_node)
 		bitmaps = []
 		for i in range(len(cells_seqs)):
 			bitmap = self._bitmap_from_cells_seq(handle, cells_seqs[i])
@@ -128,7 +129,6 @@ class RailObsForRailEnv(ObservationBuilder):
 				for s in range(steps):
 					bitmap[:, 0] = 0
 					bitmap = np.roll(bitmap, -1)
-					predictions[i] = predictions[i][1:]
 
 			# If agent not departed, add 0 at the beginning
 			if agent.status == RailAgentStatus.READY_TO_DEPART:
@@ -137,7 +137,7 @@ class RailObsForRailEnv(ObservationBuilder):
 
 			bitmaps.append(bitmap)
 
-		return bitmaps, predictions
+		return bitmaps, altpaths
 
 	def get_initial_bitmaps(self, print):
 		"""
@@ -164,14 +164,24 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		elif agent.status == RailAgentStatus.ACTIVE:
 			# This can return None when rails are disconnected or there was an error in the DistanceMap
-			if self.prediction_dict[handle] is None:  # Railway disrupted
+			if self.paths[handle] is None:  # Railway disrupted
 				#TODO check if is None when rail disrupted
 				action = RailEnvActions.STOP_MOVING
 			else:
 				# Get action
-				action = self.prediction_dict[handle][0][4]
-				# Consume prediction
-				self.prediction_dict[handle] = self.prediction_dict[handle][1:]
+				step = self.paths[handle][0]
+				next_action_element = step.next_action_element.action  # Get next_action_element
+
+				assert step.position == agent.position
+				# Just to use the correct form/name
+				if next_action_element == 1:
+					action = RailEnvActions.MOVE_LEFT
+				elif next_action_element == 2:
+					action = RailEnvActions.MOVE_FORWARD
+				elif next_action_element == 3:
+					action = RailEnvActions.MOVE_RIGHT
+				
+				self.paths[handle] = self.paths[handle][1:]
 
 		else:  # If status == DONE
 			action = RailEnvActions.DO_NOTHING
@@ -181,24 +191,23 @@ class RailObsForRailEnv(ObservationBuilder):
 	def delay(self, handle, bitmaps, rail, direction, delay):
 		bitmaps[handle] = np.roll(bitmaps[handle], delay)
 		bitmaps[handle, rail, 0:delay] = direction
-		# TODO? this doesn't updates the timestep
-		steps = np.repeat([self.prediction_dict[handle][0]], [delay], axis=0)
-		self.prediction_dict[handle] = np.concatenate((steps, self.prediction_dict[handle]))
-		# print("Train {} delayed of {}".format(handle, delay))
 		return bitmaps
 
+	# This is called when a train stops, every other train behind should be delayed
 	def delay_schedule(self, handle, bitmaps, rail, direction):
 		if bitmaps[handle, rail, 0] != 0:  # If agent is active
 			others = self._get_trains_on_rails(bitmaps, rail, handle)
-			# print("Other trains on rail {}: {}".format(rail, others))
+			# The current agent is before a switch
 			first_time = 1
 			for other in others:
-				o, o_exit = other  #  other train (id), other exit,
+				o, o_exit = other  #  other train (id), other exit
 				o_speed = int(1 / self.env.agents[o].speed_data['speed'])
-				if o_exit < first_time + o_speed:
+				if o_exit < first_time + o_speed: # If it's going to surpass this
+					# Always delay of 1 cell (* speed)
 					delay = first_time + o_speed - o_exit
 					bitmaps = self.delay(o, bitmaps, rail, direction, delay)
 					first_time += o_speed
+
 		return bitmaps
 
 	def update_bitmaps(self, a, network_action, bitmaps):
@@ -244,7 +253,7 @@ class RailObsForRailEnv(ObservationBuilder):
 						action = RailEnvActions.STOP_MOVING
 					else:
 						curr_exit_time = np.argmax(bitmaps[a, next_rail, :] == 0)
-						if curr_exit_time <= last_exit:
+						if curr_exit_time <= last_exit: #TODO! check if this is correct
 							delay = last_exit + int(1 / self.env.agents[a].speed_data['speed']) - curr_exit_time
 							bitmaps = self.delay(a, bitmaps, next_rail, next_dir, delay)
 
@@ -382,14 +391,14 @@ class RailObsForRailEnv(ObservationBuilder):
 		:param handle: 
 		:return: 
 		"""
-		all_trains = []
+		trains = []
 		for a in range(self.env.get_num_agents()):
 			if not (maps[a, rail, 0] == 0 or a == handle):
 				expected_exit_time = np.argmax(maps[a, rail, :] == 0) # Takes index/ts of last bit in a row
-				all_trains.append((a, expected_exit_time))
-		all_trains.sort()
+				trains.append((a, expected_exit_time))
+		trains.sort()
 		
-		return all_trains
+		return trains
 		
 	# Slightly modified wrt to the other
 	def _map_to_graph(self):

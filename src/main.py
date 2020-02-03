@@ -142,7 +142,16 @@ def main(args):
 					rail = np.argmax(np.absolute(maps[a, :, 0]))
 					assert abs(maps[a, rail, 0]) == 0
 
-				elif np.all(maps[a, :, 0] == maps[a, :, times_per_cell]) or not info['action_required'][a]:
+				elif not info['action_required'][a]:
+					obs = preprocess_obs(a, maps[a], maps, max_rails)
+					buffer_obs[a] = obs.copy()
+					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
+
+					network_action = 1
+					action = RailEnvActions.DO_NOTHING
+					maps = obs_builder.unroll_bitmap(a, maps)
+
+				elif np.all(maps[a, :, 0] == maps[a, :, times_per_cell]):
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
 					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
@@ -150,9 +159,11 @@ def main(args):
 					network_action = 1
 					action = obs_builder.get_agent_action(a)
 					maps = obs_builder.unroll_bitmap(a, maps)
+
 				else: # Changing rails - need to perform a move
 					# TODO check how this works with new action pick mehanic
-					altmaps, predictions = obs_builder.get_altmaps(a)
+					assert not np.all(maps[a, :, 0] == maps[a, :, times_per_cell])
+					altmaps, altpaths = obs_builder.get_altmaps(a)
 
 					if len(altmaps) > 1:
 						q_values = np.array([])
@@ -173,7 +184,7 @@ def main(args):
 
 						# Update bitmaps and predictions
 						maps[a, :, :] = altmaps[best_i]
-						obs_builder.prediction_dict[a] = predictions[best_i]
+						obs_builder.paths[a] = altpaths[best_i]
 						obs = altobs[best_i]
 
 					else: # Continue on the same path

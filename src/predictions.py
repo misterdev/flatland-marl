@@ -80,7 +80,7 @@ class ShortestPathPredictorForRailEnv(PredictionBuilder):
             predictions.append(prediction)
             cells_seqs.append(self.cells_seq_from_prediction(handle, prediction))
         
-        return predictions, cells_seqs 
+        return altpaths, cells_seqs
 
     def prediction_from_path(self, handle, path):
         agent = self.env.agents[handle]
