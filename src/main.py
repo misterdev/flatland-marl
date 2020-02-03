@@ -37,11 +37,11 @@ def main(args):
 
 	# Maps speeds to % of appearance in the env
 	# TODO! temporary set all speed to 1
-	speed_ration_map = {1.: 1}  # Slow freight train
-	# speed_ration_map = {1.: 0.25,  # Fast passenger train
-	#                     1. / 2.: 0.25,  # Fast freight train
-	#                     1. / 3.: 0.25,  # Slow commuter train
-	#                     1. / 4.: 0.25}  # Slow freight train
+	# speed_ration_map = {1.: 1}  # Slow freight train
+	speed_ration_map = {1.: 0.25,  # Fast passenger train
+	                    1. / 2.: 0.25,  # Fast freight train
+	                    1. / 3.: 0.25,  # Slow commuter train
+	                    1. / 4.: 0.25}  # Slow freight train
 
 	schedule_generator = sparse_schedule_generator(speed_ration_map)
 	
@@ -112,12 +112,12 @@ def main(args):
 				network_action = None
 				agent = env.agents[a]
 
-				# TODO evaluate only once
+				# TODO evaluate those only once
 				agent_speed = agent.speed_data["speed"]
 				times_per_cell = int(np.reciprocal(agent_speed))
 
 				# If two first consecutive bits in the bitmap are the same
-				# TODO! handle if train is arrived
+				# Handle if train is arrived
 				if agent.status == RailAgentStatus.DONE:
 					# TODO? can you improve this? do i need this?
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
@@ -158,47 +158,47 @@ def main(args):
 						buffer_obs[a] = obs.copy()
 						update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
 
-						if obs_builder.next_cell_occupied(a):
-							network_action = 0
-							action = RailEnvActions.STOP_MOVING
-						else:
-							network_action = 1
-							action = obs_builder.get_agent_action(a)
-							maps = obs_builder.unroll_bitmap(a, maps)
+						# TODO? is this useful?
+						# if obs_builder.next_cell_occupied(a):
+						# 	network_action = 0
+						# 	action = RailEnvActions.STOP_MOVING
+						# else:
+						network_action = 1
+						action = obs_builder.get_agent_action(a)
+						maps = obs_builder.unroll_bitmap(a, maps)
 
 					else: # Changing rails - need to perform a move
-						# TODO check how this works with new action pick mehanic
 						altmaps, altpaths = obs_builder.get_altmaps(a)
 
-						if len(altmaps) > 1:
-							q_values = np.array([])
-							altobs = []
-							for i in range(len(altmaps)):
-								obs = preprocess_obs(a, altmaps[i], maps, max_rails)
-								altobs.append(obs)
-								q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
+						# if len(altmaps) > 1: # TODO? is this useful? (1/2)
+						q_values = np.array([])
+						altobs = []
+						for i in range(len(altmaps)):
+							obs = preprocess_obs(a, altmaps[i], maps, max_rails)
+							altobs.append(obs)
+							q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
 
-							# Epsilon-greedy action selection
-							if np.random.random() > eps:
-								argmax = np.argmax(q_values)
-								network_action = argmax % 2
-								best_i = argmax // 2
-							else:
-								network_action = np.random.choice([0, 1])
-								best_i = np.random.choice(np.arange(len(altmaps)))
+						# Epsilon-greedy action selection
+						if np.random.random() > eps:
+							argmax = np.argmax(q_values)
+							network_action = argmax % 2
+							best_i = argmax // 2
+						else:
+							network_action = np.random.choice([0, 1])
+							best_i = np.random.choice(np.arange(len(altmaps)))
 
-							# Update bitmaps and predictions
-							maps[a, :, :] = altmaps[best_i]
-							obs_builder.paths[a] = altpaths[best_i]
-							obs = altobs[best_i]
+						# Update bitmaps and predictions
+						maps[a, :, :] = altmaps[best_i]
+						obs_builder.paths[a] = altpaths[best_i]
+						obs = altobs[best_i]
 
-						else: # Continue on the same path
-							obs = preprocess_obs(a, maps[a], maps, max_rails)
-							q_values = dqn.act(obs).cpu().data.numpy() # Network chooses action
-							if np.random.random() > eps:
-								network_action = np.argmax(q_values)
-							else:
-								network_action = np.random.choice([0, 1])	
+						# else: # Continue on the same path # TODO? is this useful? (2/2)
+						# 	obs = preprocess_obs(a, maps[a], maps, max_rails)
+						# 	q_values = dqn.act(obs).cpu().data.numpy() # Network chooses action
+						# 	if np.random.random() > eps:
+						# 		network_action = np.argmax(q_values)
+						# 	else:
+						# 		network_action = np.random.choice([0, 1])	
 
 						update_values[a] = True
 						# Save current state in buffer
