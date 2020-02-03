@@ -188,6 +188,27 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		return action
 
+	def next_cell_occupied(self, handle):
+		occupied = False
+		
+		if self.paths[handle][0]:
+			next_pos = self.paths[handle][0].next_action_element.next_position
+			for agent in self.env.agents:
+				if agent.handle != handle and agent.position == next_pos:
+					occupied = True
+					break
+		else:
+			print('WHHHHAAAAT')
+
+		return occupied
+
+	def should_generate_altmaps(self, handle):
+		curr_pos = self.env.agents[handle].position
+		next_pos = self.paths[handle][0].next_action_element.next_position
+		curr_rail, _ = self.get_edge_from_cell(curr_pos)
+		next_rail, _ = self.get_edge_from_cell(next_pos)
+		return curr_rail != -1 and next_rail == -1
+
 	def delay(self, handle, bitmaps, rail, direction, delay):
 		bitmaps[handle] = np.roll(bitmaps[handle], delay)
 		bitmaps[handle, rail, 0:delay] = direction
@@ -253,7 +274,7 @@ class RailObsForRailEnv(ObservationBuilder):
 						action = RailEnvActions.STOP_MOVING
 					else:
 						curr_exit_time = np.argmax(bitmaps[a, next_rail, :] == 0)
-						if curr_exit_time <= last_exit: #TODO! check if this is correct
+						if curr_exit_time <= last_exit:
 							delay = last_exit + int(1 / self.env.agents[a].speed_data['speed']) - curr_exit_time
 							bitmaps = self.delay(a, bitmaps, next_rail, next_dir, delay)
 
