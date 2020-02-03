@@ -27,6 +27,8 @@ from src.agent import DQNAgent
 
 import src.utils.debug as debug
 
+# TODO Resume training from checkpoint, save metrics so far, add args to argparse
+
 def main(args):
 	rail_generator = sparse_rail_generator(max_num_cities=args.max_num_cities,
 	                                       seed=args.seed,
@@ -205,7 +207,7 @@ def main(args):
 
 					if args.train and crash:
 						network_action = 0 # TODO! are you sure?
-						print('ADDING CRASH TUPLE')
+						# print('ADDING CRASH TUPLE')
 						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
 
 					next_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
@@ -270,7 +272,7 @@ def main(args):
 				100 * (num_agents_done / args.num_agents),
 				eps), end=" ")
 
-		if ep % 20 == 0:
+		if ep % 50 == 0:
 			print(
 				'\rTraining {} Agents.\t Episode {}\t Average Score: {:.3f}\tDones: {:.2f}%\tEpsilon: {:.2f} \t'.format(
 					env.get_num_agents(),
@@ -284,6 +286,7 @@ def main(args):
 		
 		
 if __name__ == '__main__':
+	
 	parser = argparse.ArgumentParser(description='Railobs')
 	# Env parameters
 	parser.add_argument('--network-action-space', type=int, default=2, help='Number of actions allowed in the environment')
@@ -298,18 +301,25 @@ if __name__ == '__main__':
 	parser.add_argument('--malfunction-rate', type=int, default=2000, help='Rate of malfunction occurrence of single agent')
 	parser.add_argument('--min-duration', type=int, default=0, help='Min duration of malfunction')
 	parser.add_argument('--max-duration', type=int, default=0, help='Max duration of malfunction')
-	parser.add_argument('--observation-builder', type=str, default='GraphObsForRailEnv', help='Class to use to build observation for agent')
 	parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
-	parser.add_argument('--bfs-depth', type=int, default=4, help='BFS depth of the graph observation')
 	parser.add_argument('--prediction-depth', type=int, default=500, help='Prediction depth for shortest path strategy, i.e. length of a path')
+	
 	# Training
-	parser.add_argument('--model-name', type=str, default="ddqn-replay-buffer", help="Model name")
+	parser.add_argument('--model-name', type=str, default="ddqn-example", help="Model name")
 	parser.add_argument('--num-episodes', type=int, default=15000, help="Number of episodes to run")
 	parser.add_argument('--eps-decay', type=float, default=0.998, help="Factor to decrease eps in eps-greedy")
+	parser.add_argument('--buffer-size', type=int, default=100000, help='Size of experience replay buffer (i.e. number of tuples')
+	parser.add_argument('--batch-size', type=int, default=512, help='Size of mini-batch for replay buffer')
+	parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
+	parser.add_argument('--tau', type=float, default=1e-3, help='Interpolation parameter for soft update of target network weights')
+	parser.add_argument('--lr', type=float, default=0.5e-4, help='Learning rate for SGD')
+	parser.add_argument('--update-every', type=int, default=10, help='How often to update the target network')
+	
 	# Misc
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
 	parser.add_argument('--train', action='store_true', help='Perform training')
 	parser.add_argument('--print', action='store_true', help='Save internal representations as files')
+	
 	args = parser.parse_args()
 	main(args)

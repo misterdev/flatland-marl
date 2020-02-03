@@ -10,15 +10,6 @@ import torch.optim as optim
 
 from src.model import Dueling_DQN
 
-# TODO add these to argparse
-# Params for ReplayBuffer class
-BUFFER_SIZE = int(1e5)  # replay buffer size, that is size of the memory keeping the experiences, 1e5
-BATCH_SIZE = 512  # minibatch size = 512 for replay buffer
-
-GAMMA = 0.99  # discount factor 0.99
-TAU = 1e-3  # for soft update of target parameters
-LR = 0.5e-4  # learning rate 0.5e-4
-UPDATE_EVERY = 10  # how often to update the network
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -35,6 +26,7 @@ class DQNAgent:
 			state_size (int): dimension of each state
 			action_space (int): dimension of each action
 		"""
+		self.args = args
 		# self.state_size = state_size # used by the network, not the algorithm
 		self.width = args.prediction_depth + 1 # Bitmap width
 		self.height = bitmap_height # Max conflicting agents x max num rails
@@ -44,10 +36,10 @@ class DQNAgent:
 		self.qnetwork_local = Dueling_DQN(self.width, self.height, action_space).to(device)
 		self.qnetwork_target = copy.deepcopy(self.qnetwork_local)
 
-		self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
+		self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=self.args.lr)
 
 		# Replay memory
-		self.memory = ReplayBuffer(action_space, BUFFER_SIZE, BATCH_SIZE, self.width, self.height)
+		self.memory = ReplayBuffer(action_space, self.args.buffer_size, self.args.batch_size, self.width, self.height)
 		# Initialize time step (for updating every UPDATE_EVERY steps)
 		self.t_step = 0
 
@@ -67,13 +59,13 @@ class DQNAgent:
 
 		# Learn every UPDATE_EVERY time steps.
 		# training is done taking a sample batch from the replay memory
-		self.t_step = (self.t_step + 1) % UPDATE_EVERY
+		self.t_step = (self.t_step + 1) % self.args.update_every # TODO Meglio farla ad eps?
 		if self.t_step == 0:
 			# If enough samples are available in memory, get random subset and learn
-			if len(self.memory) > BATCH_SIZE:
+			if len(self.memory) > self.args.batch_size:
 				experiences = self.memory.sample()
 				if train:
-					self.learn(experiences, GAMMA)
+					self.learn(experiences, self.args.gamma)
 
 	def act(self, state, eps=0.):
 		"""Returns actions for given state as per current policy.
@@ -103,12 +95,12 @@ class DQNAgent:
 		states, actions, rewards, next_states, dones = experiences		# batch_size experiences
 
 		# Get expected Q values from local model
-		Q_expected = self.qnetwork_local(states).gather(1, actions.unsqueeze(-1)).view(BATCH_SIZE)
+		Q_expected = self.qnetwork_local(states).gather(1, actions.unsqueeze(-1)).view(self.args.batch_size)
 
 		if self.double_dqn:
 			# Double DQN
 			q_best_action = self.qnetwork_local(next_states).max(1)[1] # shape (512)
-			Q_targets_next = self.qnetwork_target(next_states).gather(1, q_best_action.unsqueeze(-1)).view(BATCH_SIZE) # (512, 1)
+			Q_targets_next = self.qnetwork_target(next_states).gather(1, q_best_action.unsqueeze(-1)).view(self.args.batch_size) # (512, 1)
 		else:
 			# DQN
 			Q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(-1)
@@ -125,7 +117,7 @@ class DQNAgent:
 		self.optimizer.step()
 
 		# ------------------- Update target network ------------------- #
-		self.soft_update(self.qnetwork_local, self.qnetwork_target, TAU)
+		self.soft_update(self.qnetwork_local, self.qnetwork_target, self.args.tau)
 
 	def soft_update(self, local_model, target_model, tau):
 		"""Soft update model parameters.
