@@ -29,7 +29,7 @@ class DQNAgent:
 		self.args = args
 		# self.state_size = state_size # used by the network, not the algorithm
 		self.width = args.prediction_depth + 1 # Bitmap width
-		self.height = bitmap_height # Max conflicting agents x max num rails
+		self.height = bitmap_height # num altmaps (3) x max num rails
 		self.action_space = action_space
 		self.double_dqn = double_dqn
 		# Q-Network
@@ -107,10 +107,10 @@ class DQNAgent:
 
 		# Compute Q targets for current states
 
-		Q_targets = rewards + (gamma * Q_targets_next * (1 - dones)) # (512, 512)
+		Q_targets = rewards + (gamma * Q_targets_next * (1 - dones))
 
 		# Compute loss
-		loss = F.mse_loss(Q_expected, Q_targets) # Fix: shape error
+		loss = F.mse_loss(Q_expected, Q_targets)
 		# Minimize the loss
 		self.optimizer.zero_grad()
 		loss.backward()
@@ -191,9 +191,9 @@ class ReplayBuffer:
 			# Debug shapes
 			#for i in range(len(states)):
 			#	print(states[i].shape)  
-			# Could be that one of the size of the arrays in the list states is different than the others
+			# States and next_states
 			np_states = np.array(states) # (512, 1, 400, 101) 
-			np_states = np.reshape(np_states, (len(states), self.height, self.width))
+			np_states = np.reshape(np_states, (len(states), 1, self.height, self.width))
 		else: # Actions, rewards, dones
 			np_states = np.reshape(np.array(states), (len(states))) # (512, )
 	
