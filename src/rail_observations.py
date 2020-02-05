@@ -169,10 +169,10 @@ class RailObsForRailEnv(ObservationBuilder):
 				action = RailEnvActions.STOP_MOVING
 			else:
 				# Get action
-				step = self.paths[handle][0]
+				step = self.paths[handle][0] # TODO Error! IndexError: list index out of range
 				next_action_element = step.next_action_element.action  # Get next_action_element
 
-				assert step.position == agent.position
+				#assert step.position == agent.position TODO
 				# Just to use the correct form/name
 				if next_action_element == 1:
 					action = RailEnvActions.MOVE_LEFT
@@ -180,13 +180,37 @@ class RailObsForRailEnv(ObservationBuilder):
 					action = RailEnvActions.MOVE_FORWARD
 				elif next_action_element == 3:
 					action = RailEnvActions.MOVE_RIGHT
+
+				else: # TODO Temp: to solve local variable 'action' referenced before assignment
+					action = RailEnvActions.DO_NOTHING
 				
 				self.paths[handle] = self.paths[handle][1:]
 
 		else:  # If status == DONE
 			action = RailEnvActions.DO_NOTHING
 
-		return action
+		return action # TODO Bug: action referenced before assignment!
+
+	def next_cell_occupied(self, handle):
+		occupied = False
+		
+		if self.paths[handle][0]:
+			next_pos = self.paths[handle][0].next_action_element.next_position
+			for agent in self.env.agents:
+				if agent.handle != handle and agent.position == next_pos:
+					occupied = True
+					break
+		else:
+			print('WHHHHAAAAT')
+
+		return occupied
+
+	def should_generate_altmaps(self, handle):
+		curr_pos = self.env.agents[handle].position
+		next_pos = self.paths[handle][0].next_action_element.next_position
+		curr_rail, _ = self.get_edge_from_cell(curr_pos)
+		next_rail, _ = self.get_edge_from_cell(next_pos)
+		return curr_rail != -1 and next_rail == -1
 
 	def delay(self, handle, bitmaps, rail, direction, delay):
 		bitmaps[handle] = np.roll(bitmaps[handle], delay)
@@ -225,7 +249,7 @@ class RailObsForRailEnv(ObservationBuilder):
 			# If its initial position is occupied or he shouldn't depart 
 			if ( network_action == 1 and is_occupied) or network_action == 0:
 				action = RailEnvActions.STOP_MOVING
-				return action, bitmaps, crash
+				return action, bitmaps, crash # TODO! Here crash must be true?
 
 		if network_action == 1:  # Go
 			# print("Advancing", a)
@@ -237,7 +261,7 @@ class RailObsForRailEnv(ObservationBuilder):
 
 			if bitmaps[a, next_rail, 0] == 0:
 				print("Train {} has reached its target".format(a))
-				assert agent.position == agent.target
+				#assert agent.position == agent.target TODO
 				# TODO! adding action_required in main, you will never come here again
 			else:
 				# Check if rail is already occupied to compute new exit time
@@ -253,7 +277,7 @@ class RailObsForRailEnv(ObservationBuilder):
 						action = RailEnvActions.STOP_MOVING
 					else:
 						curr_exit_time = np.argmax(bitmaps[a, next_rail, :] == 0)
-						if curr_exit_time <= last_exit: #TODO! check if this is correct
+						if curr_exit_time <= last_exit:
 							delay = last_exit + int(1 / self.env.agents[a].speed_data['speed']) - curr_exit_time
 							bitmaps = self.delay(a, bitmaps, next_rail, next_dir, delay)
 
@@ -325,7 +349,7 @@ class RailObsForRailEnv(ObservationBuilder):
 			if rail == -1: # Agent is on a switch
 				holes += 1
 				# Skip duplicated cells (for agents with fractional speed)
-				if cell != path[ts+1]:
+				if cell != path[ts+1]: # TODO Index out of list, only when different speed profiles are enabled
 					node_id = self.cell_to_id_node[cell]
 					# Calculate exit direction (that's the entry cp for the next edge)
 					cp = direction_to_point(cell, path[ts+1])

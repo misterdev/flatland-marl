@@ -25,11 +25,24 @@ from src.predictions import ShortestPathPredictorForRailEnv
 from src.preprocessing import preprocess_obs
 from src.agent import DQNAgent
 
+from src.utils.plot import plot_metric
 import src.utils.debug as debug
 
+
 # TODO Resume training from checkpoint, save metrics so far, add args to argparse
+# TODO Change env.step, can't return a reward when timer expires
 
 def main(args):
+	
+	# Show options and values
+	print(' ' * 26 + 'Options')
+	for k, v in vars(args).items():
+		print(' ' * 26 + k + ': ' + str(v))
+	# Where to save models
+	results_dir = os.path.join('results', args.model_id)
+	if not os.path.exists(results_dir):
+		os.makedirs(results_dir)
+	
 	rail_generator = sparse_rail_generator(max_num_cities=args.max_num_cities,
 	                                       seed=args.seed,
 	                                       grid_mode=args.grid_mode,
@@ -40,11 +53,12 @@ def main(args):
 	# Maps speeds to % of appearance in the env
 	# TODO! temporary set all speed to 1
 	speed_ration_map = {1.: 1}  # Slow freight train
-	# speed_ration_map = {1.: 0.25,  # Fast passenger train
-	#                     1. / 2.: 0.25,  # Fast freight train
-	#                     1. / 3.: 0.25,  # Slow commuter train
-	#                     1. / 4.: 0.25}  # Slow freight train
-
+	'''
+	speed_ration_map = {1.: 0.25,  # Fast passenger train
+	                    1. / 2.: 0.25,  # Fast freight train
+	                    1. / 3.: 0.25,  # Slow commuter train
+	                    1. / 4.: 0.25}  # Slow freight train
+	'''
 	schedule_generator = sparse_schedule_generator(speed_ration_map)
 	
 	prediction_builder = ShortestPathPredictorForRailEnv(max_depth=args.prediction_depth)
@@ -75,22 +89,21 @@ def main(args):
 
 	max_rails = 100 # TODO Must be a parameter of the env (estimated)
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
-	max_steps = 100
+	max_steps = 200
 	
 	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
 	
 	if args.render:
-		file = os.path.isfile("checkpoints/"+args.model_name)
+		file = os.path.isfile("checkpoints/"+args.model_id)
 		if file:
 			dqn.qnetwork_local.load_state_dict(torch.load(file))
-			
-	eps = 1.
-	eps_end = 0.005
+	
+	eps = args.start_eps
 	railenv_action_dict = {}
 	network_action_dict = {}
-	scores_window = deque(maxlen=100)
+	rewards_window = deque(maxlen=100)
 	done_window = deque(maxlen=100)
-	scores = []
+	rewards_list = []
 	dones_list = []
 	update_values = [False] * args.num_agents
 	buffer_obs = [None] * args.num_agents
@@ -98,7 +111,7 @@ def main(args):
 
 	############ Main loop
 	for ep in range(args.num_episodes):
-		score = 0
+		reward_sum = 0
 		env_done = 0
 		_, info = env.reset()
 		if args.render:
@@ -114,11 +127,12 @@ def main(args):
 				network_action = None
 				agent = env.agents[a]
 
-				# TODO evaluate only once
+				# TODO evaluate those only once
 				agent_speed = agent.speed_data["speed"]
 				times_per_cell = int(np.reciprocal(agent_speed))
+
 				# If two first consecutive bits in the bitmap are the same
-				# TODO! handle if train is arrived
+				# Handle if train is arrived
 				if agent.status == RailAgentStatus.DONE:
 					# TODO? can you improve this? do i need this?
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
@@ -153,21 +167,25 @@ def main(args):
 					action = RailEnvActions.DO_NOTHING
 					maps = obs_builder.unroll_bitmap(a, maps)
 
-				elif np.all(maps[a, :, 0] == maps[a, :, times_per_cell]):
-					obs = preprocess_obs(a, maps[a], maps, max_rails)
-					buffer_obs[a] = obs.copy()
-					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
+				else:
+					if not obs_builder.should_generate_altmaps(a):
+						obs = preprocess_obs(a, maps[a], maps, max_rails)
+						buffer_obs[a] = obs.copy()
+						update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
 
-					network_action = 1
-					action = obs_builder.get_agent_action(a)
-					maps = obs_builder.unroll_bitmap(a, maps)
+						# TODO? is this useful?
+						# if obs_builder.next_cell_occupied(a):
+						# 	network_action = 0
+						# 	action = RailEnvActions.STOP_MOVING
+						# else:
+						network_action = 1
+						action = obs_builder.get_agent_action(a)
+						maps = obs_builder.unroll_bitmap(a, maps)
 
-				else: # Changing rails - need to perform a move
-					# TODO check how this works with new action pick mehanic
-					assert not np.all(maps[a, :, 0] == maps[a, :, times_per_cell])
-					altmaps, altpaths = obs_builder.get_altmaps(a)
+					else: # Changing rails - need to perform a move
+						altmaps, altpaths = obs_builder.get_altmaps(a)
 
-					if len(altmaps) > 1:
+						# if len(altmaps) > 1: # TODO? is this useful? (1/2)
 						q_values = np.array([])
 						altobs = []
 						for i in range(len(altmaps)):
@@ -189,29 +207,29 @@ def main(args):
 						obs_builder.paths[a] = altpaths[best_i]
 						obs = altobs[best_i]
 
-					else: # Continue on the same path
-						obs = preprocess_obs(a, maps[a], maps, max_rails)
-						q_values = dqn.act(obs).cpu().data.numpy() # Network chooses action
-						if np.random.random() > eps:
-							network_action = np.argmax(q_values)
-						else:
-							network_action = np.random.choice([0, 1])	
+						# else: # Continue on the same path # TODO? is this useful? (2/2)
+						# 	obs = preprocess_obs(a, maps[a], maps, max_rails)
+						# 	q_values = dqn.act(obs).cpu().data.numpy() # Network chooses action
+						# 	if np.random.random() > eps:
+						# 		network_action = np.argmax(q_values)
+						# 	else:
+						# 		network_action = np.random.choice([0, 1])	
 
-					update_values[a] = True
-					# Save current state in buffer
-					buffer_obs[a] = obs.copy()
-					# Update bitmaps and get new action
-					# TODO? detect crash function
-					# TODO? get_action function
-					action, maps, crash = obs_builder.update_bitmaps(a, network_action, maps)
-
-					if args.train and crash:
-						network_action = 0 # TODO! are you sure?
-						# print('ADDING CRASH TUPLE')
-						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
-
-					next_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
-
+						update_values[a] = True
+						# Save current state in buffer
+						buffer_obs[a] = obs.copy()
+						# Update bitmaps and get new action
+						# TODO? detect crash function
+						# TODO? get_action function
+						action, maps, crash = obs_builder.update_bitmaps(a, network_action, maps)
+################################################
+						if args.train and crash: # TODO Non sicura del livello di indentazione
+							network_action = 0 # TODO! are you sure?
+							# print('ADDING CRASH TUPLE')
+							dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
+					if args.train:
+						next_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
+################################################
 				network_action_dict.update({a: network_action})
 				railenv_action_dict.update({a: action})
 
@@ -243,14 +261,14 @@ def main(args):
 						buffer_obs[a] = next_obs[a].copy()
 			
 			for a in range(env.get_num_agents()):	
-				score += reward[a] / env.get_num_agents() # Update score
+				reward_sum += reward[a] / env.get_num_agents() # Update cumulative reward
 				
 			if done['__all__']:
 				env_done = 1
 				break
 
 		################### End of the episode
-		eps = max(eps_end, args.eps_decay * eps)  # Decrease epsilon
+		eps = max(args.end_eps, args.eps_decay * eps)  # Decrease epsilon
 		# Metrics
 		done_window.append(env_done)
 		num_agents_done = 0  # Num of agents that reached their target
@@ -258,33 +276,37 @@ def main(args):
 			if done[a]:
 				num_agents_done += 1
 
-		scores_window.append(score / max_steps)  # Save most recent score
-		scores.append(np.mean(scores_window))
+		rewards_window.append(reward_sum / max_steps)  # Save most recent cumulative reward
+		rewards_list.append(np.mean(rewards_window))
 		dones_list.append((np.mean(done_window)))
 
 		# Print training results info
 		print(
-			'\r{} Agents on ({},{}).\t Ep: {}\t Avg Score: {:.3f}\t Env Dones so far: {:.2f}%\t Done Agents in ep: {:.2f}%\t Eps: {:.2f}'.format(
+			'\r{} Agents on ({},{}). Ep: {}\t Avg reward: {:.3f}\t Env dones so far: {:.2f}%\t Done agents in ep: {:.2f}%\t Eps: {:.2f}'.format(
 				env.get_num_agents(), args.width, args.height,
 				ep,
-				np.mean(scores_window),
+				np.mean(rewards_window),
 				100 * np.mean(done_window),
 				100 * (num_agents_done / args.num_agents),
 				eps), end=" ")
 
-		if ep % 50 == 0:
+		if ep != 0 and (ep + 1) % args.checkpoint_interval == 0:
 			print(
-				'\rTraining {} Agents.\t Episode {}\t Average Score: {:.3f}\tDones: {:.2f}%\tEpsilon: {:.2f} \t'.format(
-					env.get_num_agents(),
+				'\r{} Agents on ({},{}).\t Ep: {}\t Avg reward: {:.3f}\t Env dones so far: {:.2f}%\t Done agents in ep: {:.2f}%\t Eps: {:.2f}'.format(
+					env.get_num_agents(), args.width, args.height,
 					ep,
-					np.mean(scores_window),
+					np.mean(rewards_window),
 					100 * np.mean(done_window),
 					100 * (num_agents_done / args.num_agents),
 					eps))
+			
+			# Save model and metrics
 			if args.train:
-				torch.save(dqn.qnetwork_local.state_dict(), './checkpoints/' + str(args.model_name) + str(ep) + '.pth')
-		
-		
+				torch.save(dqn.qnetwork_local.state_dict(), results_dir + 'checkpoint.pth') # TODO Fix name
+				plot_metric(list(range(ep+1)), rewards_list, 'reward', path=results_dir)
+				plot_metric(list(range(ep+1)), dones_list, 'dones', path=results_dir)
+
+
 if __name__ == '__main__':
 	
 	parser = argparse.ArgumentParser(description='Railobs')
@@ -305,8 +327,10 @@ if __name__ == '__main__':
 	parser.add_argument('--prediction-depth', type=int, default=500, help='Prediction depth for shortest path strategy, i.e. length of a path')
 	
 	# Training
-	parser.add_argument('--model-name', type=str, default="ddqn-example", help="Model name")
+	parser.add_argument('--model-id', type=str, default="ddqn-example", help="Model name/id")
 	parser.add_argument('--num-episodes', type=int, default=15000, help="Number of episodes to run")
+	parser.add_argument('--start-eps', type=float, default=1.0, help="Initial value of epsilon")
+	parser.add_argument('--end-eps', type=float, default=0.005, help="Lower limit of epsilon (i.e. can't decrease more)")
 	parser.add_argument('--eps-decay', type=float, default=0.998, help="Factor to decrease eps in eps-greedy")
 	parser.add_argument('--buffer-size', type=int, default=100000, help='Size of experience replay buffer (i.e. number of tuples')
 	parser.add_argument('--batch-size', type=int, default=512, help='Size of mini-batch for replay buffer')
@@ -319,6 +343,7 @@ if __name__ == '__main__':
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
 	parser.add_argument('--train', action='store_true', help='Perform training')
+	parser.add_argument('--checkpoint-interval', type=int, default=50, help='Interval of episodes for each save of plots and model')
 	parser.add_argument('--print', action='store_true', help='Save internal representations as files')
 	
 	args = parser.parse_args()
