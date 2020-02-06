@@ -28,10 +28,6 @@ from src.agent import DQNAgent
 from src.utils.plot import plot_metric
 import src.utils.debug as debug
 
-
-# TODO Resume training from checkpoint, save metrics so far, add args to argparse
-# TODO Change env.step, can't return a reward when timer expires
-
 def main(args):
 	
 	# Show options and values
@@ -94,24 +90,33 @@ def main(args):
 	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
 	
 	if args.render:
-		file = os.path.isfile("checkpoints/"+args.model_id)
+		file = os.path.isfile("checkpoints/"+args.model_id) # TODO
 		if file:
 			dqn.qnetwork_local.load_state_dict(torch.load(file))
 	
 	eps = args.start_eps
 	railenv_action_dict = {}
 	network_action_dict = {}
-	rewards_window = deque(maxlen=100)
-	done_window = deque(maxlen=100)
-	rewards_list = []
-	dones_list = []
+	# Metrics
+	done_window = deque(maxlen=args.window_size) # Env dones over last window_size episodes
+	done_agents_window = deque(maxlen=args.window_size) # Fraction of done agents over last ...
+	reward_window = deque(maxlen=args.window_size) # Cumulative rewards over last window_size episodes
+	norm_reward_window = deque(maxlen=args.window_size) # Normalized cum. rewards over last window_size episodes
+	# Track means over windows of window_size episodes
+	mean_dones = [] 
+	mean_agent_dones = []
+	mean_rewards = []
+	mean_norm_rewards = []
+	# Episode rewards/dones/norm rewards since beginning of training TODO
+	#env_dones = []
+	
 	update_values = [False] * args.num_agents
 	buffer_obs = [None] * args.num_agents
 	next_obs = [None] * args.num_agents
 
 	############ Main loop
 	for ep in range(args.num_episodes):
-		reward_sum = 0
+		cumulative_reward = 0
 		env_done = 0
 		_, info = env.reset()
 		if args.render:
@@ -261,50 +266,59 @@ def main(args):
 						buffer_obs[a] = next_obs[a].copy()
 			
 			for a in range(env.get_num_agents()):	
-				reward_sum += reward[a] / env.get_num_agents() # Update cumulative reward
+				cumulative_reward += reward[a] # / env.get_num_agents() # Update cumulative reward (not norm)
 				
-			if done['__all__']:
+				
+			if done['__all__']: # TODO!: env sets done[all] = True for everyone when time limit is reached
 				env_done = 1
 				break
 
 		################### End of the episode
 		eps = max(args.end_eps, args.eps_decay * eps)  # Decrease epsilon
 		# Metrics
-		done_window.append(env_done)
-		num_agents_done = 0  # Num of agents that reached their target
-		for a in range(env.get_num_agents()): # TODO: env sets done[all] = True for everyone when time limit is reached
+		done_window.append(env_done) # Save done in this episode
+		
+		num_agents_done = 0  # Num of agents that reached their target in the last episode
+		for a in range(env.get_num_agents()): 
 			if done[a]:
 				num_agents_done += 1
-
-		rewards_window.append(reward_sum / max_steps)  # Save most recent cumulative reward
-		rewards_list.append(np.mean(rewards_window))
-		dones_list.append((np.mean(done_window)))
+		done_agents_window.append(num_agents_done / env.get_num_agents())
+		reward_window.append(cumulative_reward)  # Save cumulative reward in this episode
+		normalized_reward = cumulative_reward / (env.compute_max_episode_steps(env.width, env.height) + env.get_num_agents())
+		norm_reward_window.append(normalized_reward)
+		
+		mean_dones.append((np.mean(done_window)))
+		mean_agent_dones.append((np.mean(done_agents_window)))
+		mean_rewards.append(np.mean(reward_window))
+		mean_norm_rewards.append(np.mean(norm_reward_window))
 
 		# Print training results info
 		print(
-			'\r{} Agents on ({},{}). Ep: {}\t Avg reward: {:.3f}\t Env dones so far: {:.2f}%\t Done agents in ep: {:.2f}%\t Eps: {:.2f}'.format(
+			'\r{} Agents on ({},{}). Episode: {}\t Mean done agents: {:.2f}\t Mean reward: {:.2f}\t Mean normalized reward: {:.2f}\t Done agents in last episode: {:.2f}%\t Epsilon: {:.2f}'.format(
 				env.get_num_agents(), args.width, args.height,
 				ep,
-				np.mean(rewards_window),
-				100 * np.mean(done_window),
-				100 * (num_agents_done / args.num_agents),
+				mean_agent_dones[-1],  # Fraction of done agents
+				mean_rewards[-1],
+				mean_norm_rewards[-1],
+				(num_agents_done / args.num_agents),
 				eps), end=" ")
 
 		if ep != 0 and (ep + 1) % args.checkpoint_interval == 0:
 			print(
-				'\r{} Agents on ({},{}).\t Ep: {}\t Avg reward: {:.3f}\t Env dones so far: {:.2f}%\t Done agents in ep: {:.2f}%\t Eps: {:.2f}'.format(
+				'\r{} Agents on ({},{}). Episode: {}\t Mean done agents: {:.2f}\t Mean reward: {:.2f}\t Mean normalized reward: {:.2f}\t Epsilon: {:.2f}'.format(
 					env.get_num_agents(), args.width, args.height,
 					ep,
-					np.mean(rewards_window),
-					100 * np.mean(done_window),
-					100 * (num_agents_done / args.num_agents),
+					mean_agent_dones[-1],
+					mean_rewards[-1],
+					mean_norm_rewards[-1],
 					eps))
 			
 			# Save model and metrics
-			if args.train:
-				torch.save(dqn.qnetwork_local.state_dict(), results_dir + 'checkpoint.pth') # TODO Fix name
-				plot_metric(list(range(ep+1)), rewards_list, 'reward', path=results_dir)
-				plot_metric(list(range(ep+1)), dones_list, 'dones', path=results_dir)
+			if args.train: # TODO! Now means are on moving-window (could also be done differently)
+				torch.save(dqn.qnetwork_local.state_dict(), results_dir + '/model.pth')
+				plot_metric(list(range(ep+1)), mean_dones, 'agents_done', path=results_dir)
+				plot_metric(list(range(ep+1)), mean_rewards, 'reward', path=results_dir)
+				plot_metric(list(range(ep+1)), mean_norm_rewards, 'norm_reward', path=results_dir)
 
 
 if __name__ == '__main__':
@@ -336,13 +350,14 @@ if __name__ == '__main__':
 	parser.add_argument('--batch-size', type=int, default=512, help='Size of mini-batch for replay buffer')
 	parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
 	parser.add_argument('--tau', type=float, default=1e-3, help='Interpolation parameter for soft update of target network weights')
-	parser.add_argument('--lr', type=float, default=0.5e-4, help='Learning rate for SGD')
+	parser.add_argument('--lr', type=float, default=0.00005, help='Learning rate for SGD')
 	parser.add_argument('--update-every', type=int, default=10, help='How often to update the target network')
 	
 	# Misc
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
 	parser.add_argument('--train', action='store_true', help='Perform training')
+	parser.add_argument('--window-size', type=int, default=100, help='Number of episodes to consider for moving average when evaluating model learning curve')
 	parser.add_argument('--checkpoint-interval', type=int, default=50, help='Interval of episodes for each save of plots and model')
 	parser.add_argument('--print', action='store_true', help='Save internal representations as files')
 	
