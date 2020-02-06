@@ -124,11 +124,11 @@ class RailObsForRailEnv(ObservationBuilder):
 		for i in range(len(cells_seqs)):
 			bitmap = self._bitmap_from_cells_seq(handle, cells_seqs[i])
 			# We should have only 1
-			steps = int(1 / agent.speed_data['speed']) - 1
-			if steps > 0:
-				for s in range(steps):
-					bitmap[:, 0] = 0
-					bitmap = np.roll(bitmap, -1)
+			# steps = int(1 / agent.speed_data['speed']) - 1
+			# if steps > 0:
+			# 	for s in range(steps):
+			# 		bitmap[:, 0] = 0
+			# 		bitmap = np.roll(bitmap, -1)
 
 			# If agent not departed, add 0 at the beginning
 			if agent.status == RailAgentStatus.READY_TO_DEPART:
@@ -203,11 +203,15 @@ class RailObsForRailEnv(ObservationBuilder):
 		return occupied
 
 	def should_generate_altmaps(self, handle):
-		curr_pos = self.env.agents[handle].position
-		next_pos = self.paths[handle][0].next_action_element.next_position
-		curr_rail, _ = self.get_edge_from_cell(curr_pos)
-		next_rail, _ = self.get_edge_from_cell(next_pos)
-		return curr_rail != -1 and next_rail == -1
+		if len(self.paths[handle]) > 0:
+			curr_pos = self.env.agents[handle].position
+			next_pos = self.paths[handle][0].next_action_element.next_position
+			curr_rail, _ = self.get_edge_from_cell(curr_pos)
+			next_rail, _ = self.get_edge_from_cell(next_pos)
+			return curr_rail != -1 and next_rail == -1
+		else:
+			# This shouldn't happen, but it may happen
+			return True
 
 	def delay(self, handle, bitmaps, rail, direction, delay):
 		bitmaps[handle] = np.roll(bitmaps[handle], delay)
