@@ -48,13 +48,13 @@ def main(args):
 
 	# Maps speeds to % of appearance in the env
 	# TODO! temporary set all speed to 1
-	speed_ration_map = {1.: 1}  # Slow freight train
-	'''
+	# speed_ration_map = {1.: 1}  # Slow freight train
+
 	speed_ration_map = {1.: 0.25,  # Fast passenger train
 	                    1. / 2.: 0.25,  # Fast freight train
 	                    1. / 3.: 0.25,  # Slow commuter train
 	                    1. / 4.: 0.25}  # Slow freight train
-	'''
+
 	schedule_generator = sparse_schedule_generator(speed_ration_map)
 	
 	prediction_builder = ShortestPathPredictorForRailEnv(max_depth=args.prediction_depth)
@@ -179,6 +179,7 @@ def main(args):
 						else:
 							print('UPDATE')
 							# maps = Update Bitmaps(a, net_a, maps) # TODO! implement
+							action = obs_builder.get_agent_action(a)
 				
 				# If the agent is entering a switch
 				elif obs_builder.is_before_switch(a) and info['action_required'][a]:
@@ -207,15 +208,18 @@ def main(args):
 					obs_builder.paths[a] = altpaths[best_i]
 					obs = altobs[best_i]
 
-					# crash = detect_crash() # TODO! implement
-					if crash and args.train:
-						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
-					
-					if crash:
-						network_action = 0
-						action = RailEnvActions.DO_NOTHING
+					if network_action == 0:
+						action = RailEnvActions.STOP_MOVING
 					else:
-						action = obs_builder.get_agent_action(a)
+						# crash = detect_crash() # TODO! implement
+						if crash and args.train:
+							dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
+						
+						if crash:
+							network_action = 0
+							action = RailEnvActions.DO_NOTHING
+						else:
+							action = obs_builder.get_agent_action(a)
 					
 					# maps = Update Bitmaps(a, net_a, maps) # TODO! implement
 				
@@ -237,7 +241,7 @@ def main(args):
 					# maps = Update Bitmaps(a, net_a, maps) # TODO! implement
 				else: # not action_required
 					update_values[a] = False
-					network_action = 0
+					network_action = 1
 					action = RailEnvActions.DO_NOTHING
 
 				if args.train: # TODO? are you sure?

@@ -244,9 +244,9 @@ class RailObsForRailEnv(ObservationBuilder):
 		before_switch = False
 
 		if agent.status == RailAgentStatus.ACTIVE:
-			if len(self.paths[handle]) > 0:
+			if len(self.paths[a]) > 0:
 				curr_pos = agent.position
-				next_pos = self.paths[handle][0].next_action_element.next_position
+				next_pos = self.paths[a][0].next_action_element.next_position
 				curr_rail, _ = self.get_edge_from_cell(curr_pos)
 				next_rail, _ = self.get_edge_from_cell(next_pos)
 				before_switch = curr_rail != -1 and next_rail == -1
