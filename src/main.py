@@ -130,111 +130,119 @@ def main(args):
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
 				network_action = None
-				agent = env.agents[a]
 
+				crash = False
+
+				agent = env.agents[a]
 				# TODO evaluate those only once
 				agent_speed = agent.speed_data["speed"]
 				times_per_cell = int(np.reciprocal(agent_speed))
 
-				# If two first consecutive bits in the bitmap are the same
-				# Handle if train is arrived
-				if agent.status == RailAgentStatus.DONE:
-					# TODO? can you improve this? do i need this?
+				# If agent is arrived
+				if agent.status == RailAgentStatus.DONE or agent.status == RailAgentStatus.DONE_REMOVED:
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
 					update_values[a] = False
-					
-					# TODO? TEMP
-					rail = np.argmax(np.absolute(maps[a, :, 0]))
-					assert abs(maps[a, rail, 0]) == 1
-
-				elif agent.status == RailAgentStatus.DONE_REMOVED:
-					# TODO? can you improve this? do i need this?
-					obs = preprocess_obs(a, maps[a], maps, max_rails)
-					buffer_obs[a] = obs.copy()
-					update_values[a] = False
-
+					# TODO if agent !removed you should leave a bit in the bitmap
+					# TODO? set bitmap only the first time
+					maps[a, :, :] = 0 
 					network_action = 0
 					action = RailEnvActions.DO_NOTHING
-					assert(not info['action_required'][a])
 
-					# TODO? TEMP
-					maps[a, :, 0] = 0 # TODO? this should be done only once
-					rail = np.argmax(np.absolute(maps[a, :, 0]))
-					assert abs(maps[a, rail, 0]) == 0
-
-				elif not info['action_required'][a]:
+					# TODO? Sure?
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
-					update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
 
-					network_action = 1
-					action = RailEnvActions.DO_NOTHING
-					maps = obs_builder.unroll_bitmap(a, maps)
+				# If agent is not departed
+				elif agent.status == RailAgentStatus.READY_TO_DEPART:
+					obs = preprocess_obs(a, maps[a], maps, max_rails)
+					buffer_obs[a] = obs.copy()
+					update_values[a] = True # TODO? are you sure?
+					
+					q_values = dqn.act(obs).cpu().data.numpy() # Network chooses action
+					if np.random.random() > eps:
+						network_action = np.argmax(q_values)
+					else:
+						network_action = np.random.choice([0, 1])
 
-				else:
-					if not obs_builder.should_generate_altmaps(a):
-						obs = preprocess_obs(a, maps[a], maps, max_rails)
-						buffer_obs[a] = obs.copy()
-						update_values[a] = False # Network doesn't need to choose a move and I don't store the experience
+					if network_action == 0:
+						action = RailEnvActions.DO_NOTHING
+					else: # Go
+						# crash = detect_crash() # TODO! implement
+						# Store expereince
+						if crash and args.train:
+							dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
+						
+						if crash:
+							network_action = 0
+							action = RailEnvActions.STOP_MOVING
+						else:
+							print('UPDATE')
+							# maps = Update Bitmaps(a, net_a, maps) # TODO! implement
+				
+				# If the agent is entering a switch
+				elif obs_builder.is_before_switch(a) and info['action_required'][a]:
+					update_values[a] = True
+					# NOTE this is executed multiple times if the dqn choice is 0
+					altmaps, altpaths = obs_builder.get_altmaps(a)
 
-						# TODO? is this useful?
-						# if obs_builder.next_cell_occupied(a):
-						# 	network_action = 0
-						# 	action = RailEnvActions.STOP_MOVING
-						# else:
+					q_values = np.array([])
+					altobs = []
+					for i in range(len(altmaps)):
+						obs = preprocess_obs(a, altmaps[i], maps, max_rails)
+						altobs.append(obs)
+						q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
+
+					# Epsilon-greedy action selection
+					if np.random.random() > eps:
+						argmax = np.argmax(q_values)
+						network_action = argmax % 2
+						best_i = argmax // 2
+					else:
+						network_action = np.random.choice([0, 1])
+						best_i = np.random.choice(np.arange(len(altmaps)))
+
+					# Use new bitmaps and paths
+					maps[a, :, :] = altmaps[best_i]
+					obs_builder.paths[a] = altpaths[best_i]
+					obs = altobs[best_i]
+
+					# crash = detect_crash() # TODO! implement
+					if crash and args.train:
+						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
+					
+					if crash:
+						network_action = 0
+						action = RailEnvActions.DO_NOTHING
+					else:
+						action = obs_builder.get_agent_action(a)
+					
+					# maps = Update Bitmaps(a, net_a, maps) # TODO! implement
+				
+				# If the agent is following a rail
+				elif info['action_required'][a]:
+					update_values[a] = True # TODO Sure?
+					obs = preprocess_obs(a, maps[a], maps, max_rails)
+					buffer_obs[a] = obs.copy()
+					
+					# crash = detect_crash() # TODO! implement
+					if crash: 	# TODO think about this
+						network_action = 0
+						action = RailEnvActions.STOP_MOVING
+						# TODO? store bad experience
+					else:
 						network_action = 1
 						action = obs_builder.get_agent_action(a)
-						maps = obs_builder.unroll_bitmap(a, maps)
 
-					else: # Changing rails - need to perform a move
-						altmaps, altpaths = obs_builder.get_altmaps(a)
+					# maps = Update Bitmaps(a, net_a, maps) # TODO! implement
+				else: # not action_required
+					update_values[a] = False
+					network_action = 0
+					action = RailEnvActions.DO_NOTHING
 
-						# if len(altmaps) > 1: # TODO? is this useful? (1/2)
-						q_values = np.array([])
-						altobs = []
-						for i in range(len(altmaps)):
-							obs = preprocess_obs(a, altmaps[i], maps, max_rails)
-							altobs.append(obs)
-							q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
+				if args.train: # TODO? are you sure?
+					next_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
 
-						# Epsilon-greedy action selection
-						if np.random.random() > eps:
-							argmax = np.argmax(q_values)
-							network_action = argmax % 2
-							best_i = argmax // 2
-						else:
-							network_action = np.random.choice([0, 1])
-							best_i = np.random.choice(np.arange(len(altmaps)))
-
-						# Update bitmaps and predictions
-						maps[a, :, :] = altmaps[best_i]
-						obs_builder.paths[a] = altpaths[best_i]
-						obs = altobs[best_i]
-
-						# else: # Continue on the same path # TODO? is this useful? (2/2)
-						# 	obs = preprocess_obs(a, maps[a], maps, max_rails)
-						# 	q_values = dqn.act(obs).cpu().data.numpy() # Network chooses action
-						# 	if np.random.random() > eps:
-						# 		network_action = np.argmax(q_values)
-						# 	else:
-						# 		network_action = np.random.choice([0, 1])	
-
-						update_values[a] = True
-						# Save current state in buffer
-						buffer_obs[a] = obs.copy()
-						# Update bitmaps and get new action
-						# TODO? detect crash function
-						# TODO? get_action function
-						action, maps, crash = obs_builder.update_bitmaps(a, network_action, maps)
-################################################
-						if args.train and crash: # TODO Non sicura del livello di indentazione
-							network_action = 0 # TODO! are you sure?
-							# print('ADDING CRASH TUPLE')
-							dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
-					if args.train:
-						next_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
-################################################
 				network_action_dict.update({a: network_action})
 				railenv_action_dict.update({a: action})
 

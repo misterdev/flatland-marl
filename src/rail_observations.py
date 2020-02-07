@@ -238,7 +238,35 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		return bitmaps
 
-	def update_bitmaps(self, a, network_action, bitmaps):
+
+	def is_before_switch(self, a):
+		agent = self.env.agents[a]
+		before_switch = False
+
+		if agent.status == RailAgentStatus.ACTIVE:
+			if len(self.paths[handle]) > 0:
+				curr_pos = agent.position
+				next_pos = self.paths[handle][0].next_action_element.next_position
+				curr_rail, _ = self.get_edge_from_cell(curr_pos)
+				next_rail, _ = self.get_edge_from_cell(next_pos)
+				before_switch = curr_rail != -1 and next_rail == -1
+			else:
+				# This shouldn't happen, but it may happen
+				print('[WARN] agent\'s {} path run out'.format(a))
+				before_switch = True
+
+		return before_switch
+
+	def check_crash(self, a, maps):
+		# check next-action
+		print(a)
+
+	def update_bitmaps(self, a, network_action, maps):
+		print(a)
+
+	
+
+	def update_bitmapszz(self, a, network_action, bitmaps):
 		curr_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
 		curr_dir = bitmaps[a, curr_rail, 0]
 		action = None
