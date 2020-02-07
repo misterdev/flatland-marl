@@ -151,10 +151,10 @@ class RailObsForRailEnv(ObservationBuilder):
 			debug.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
 		return bitmaps
 
-	def unroll_bitmap(self, handle, bitmaps):
-		bitmaps[handle, :, 0] = 0
-		bitmaps[handle] = np.roll(bitmaps[handle], -1)
-		return bitmaps
+	def unroll_bitmap(self, a, maps):
+		maps[a, :, 0] = 0
+		maps[a] = np.roll(maps[a], -1)
+		return maps
 
 	def get_agent_action(self, handle):
 		agent = self.env.agents[handle]
@@ -211,28 +211,11 @@ class RailObsForRailEnv(ObservationBuilder):
 			# This shouldn't happen, but it may happen
 			return True
 
-	def delay(self, handle, bitmaps, rail, direction, delay):
-		bitmaps[handle] = np.roll(bitmaps[handle], delay)
-		bitmaps[handle, rail, 0:delay] = direction
-		return bitmaps
-
-	# This is called when a train stops, every other train behind should be delayed
-	def delay_schedule(self, handle, bitmaps, rail, direction):
-		if bitmaps[handle, rail, 0] != 0:  # If agent is active
-			others = self._get_trains_on_rails(bitmaps, rail, handle)
-			# The current agent is before a switch
-			first_time = 1
-			for other in others:
-				o, o_exit = other  #  other train (id), other exit
-				o_speed = int(1 / self.env.agents[o].speed_data['speed'])
-				if o_exit < first_time + o_speed: # If it's going to surpass this
-					# Always delay of 1 cell (* speed)
-					delay = first_time + o_speed - o_exit
-					bitmaps = self.delay(o, bitmaps, rail, direction, delay)
-					first_time += o_speed
-
-		return bitmaps
-
+	def delay(self, a, maps, rail, direction, delay):
+		# TODO! this doesn't consider the first bits of curr_rail
+		maps[a] = np.roll(maps[a], delay)
+		maps[a, rail, 0:delay] = direction
+		return maps
 
 	def is_before_switch(self, a):
 		agent = self.env.agents[a]
@@ -256,10 +239,30 @@ class RailObsForRailEnv(ObservationBuilder):
 		# check next-action
 		print(a)
 
-	def update_bitmaps(self, a, network_action, maps):
-		print(a)
+	def update_bitmaps(self, a, maps, is_before_switch=False):
+		# Calculate exit time when switching rail
+		if is_before_switch:
 
-	
+			agent_speed = self.env.agents[a].speed_data['speed']
+			times_per_cell = int(np.reciprocal(agent_speed))
+
+			next_rail = np.argmax(np.absolute(maps[a, :, times_per_cell]))
+			next_dir = maps[a, next_rail, times_per_cell]
+
+			# Check if rail is already occupied to compute new exit time
+			last, last_exit = self._last_train_on_rail(maps, next_rail, a) # TODO! Check this
+			if last_exit > 0: # TODO! check this return value
+				# times_per_cell: skips the first bits that are curr_rail
+				curr_exit = np.argmax(maps[a, next_rail, times_per_cell:] == 0)
+				# Also consider the last cell of curr_rail
+				curr_exit += times_per_cell
+				# TODO? something changes if the last id is > or <  ?
+				if curr_exit <= last_exit:
+					delay = last_exit + times_per_cell - curr_exit
+					maps = self.delay(a, maps, next_rail, next_dir, delay)
+
+		maps = self.unroll_bitmap(a, maps)
+		return maps
 
 	def update_bitmapszz(self, a, network_action, bitmaps):
 		curr_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))

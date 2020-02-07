@@ -177,8 +177,7 @@ def main(args):
 							network_action = 0
 							action = RailEnvActions.STOP_MOVING
 						else:
-							print('UPDATE')
-							# maps = Update Bitmaps(a, net_a, maps) # TODO! implement
+							maps = obs_builder.update_bitmaps(a, maps)
 							action = obs_builder.get_agent_action(a)
 				
 				# If the agent is entering a switch
@@ -220,8 +219,7 @@ def main(args):
 							action = RailEnvActions.DO_NOTHING
 						else:
 							action = obs_builder.get_agent_action(a)
-					
-					# maps = Update Bitmaps(a, net_a, maps) # TODO! implement
+							maps = obs_builder.update_bitmaps(a, maps, is_before_switch=True)
 				
 				# If the agent is following a rail
 				elif info['action_required'][a]:
@@ -237,12 +235,13 @@ def main(args):
 					else:
 						network_action = 1
 						action = obs_builder.get_agent_action(a)
+						maps = obs_builder.update_bitmaps(a, maps)
 
-					# maps = Update Bitmaps(a, net_a, maps) # TODO! implement
 				else: # not action_required
 					update_values[a] = False
 					network_action = 1
 					action = RailEnvActions.DO_NOTHING
+					maps = obs_builder.update_bitmaps(a, maps)
 
 				if args.train: # TODO? are you sure?
 					next_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
