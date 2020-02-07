@@ -158,6 +158,7 @@ class RailObsForRailEnv(ObservationBuilder):
 
 	def get_agent_action(self, handle):
 		agent = self.env.agents[handle]
+		action = RailEnvActions.DO_NOTHING
 		
 		if agent.status == RailAgentStatus.READY_TO_DEPART:
 			action = RailEnvActions.MOVE_FORWARD
@@ -180,16 +181,10 @@ class RailObsForRailEnv(ObservationBuilder):
 					action = RailEnvActions.MOVE_FORWARD
 				elif next_action_element == 3:
 					action = RailEnvActions.MOVE_RIGHT
-
-				else: # TODO Temp: to solve local variable 'action' referenced before assignment
-					action = RailEnvActions.DO_NOTHING
 				
 				self.paths[handle] = self.paths[handle][1:]
 
-		else:  # If status == DONE
-			action = RailEnvActions.DO_NOTHING
-
-		return action # TODO Bug: action referenced before assignment!
+		return action
 
 	def next_cell_occupied(self, handle):
 		occupied = False
