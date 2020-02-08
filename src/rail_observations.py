@@ -233,13 +233,56 @@ class RailObsForRailEnv(ObservationBuilder):
 			else:
 				# This shouldn't happen, but it may happen
 				print('[WARN] agent\'s {} path run out'.format(a))
+				# Force path recalc
 				before_switch = True
 
 		return before_switch
 
-	def check_crash(self, a, maps):
-		# check next-action
-		print(a)
+
+	def _is_cell_occupied(self, a, cell):
+		occupied = False
+
+		for other in range(self.env.get_num_agents()):
+			if other != a and self.env.agents[other].position == cell:
+				occupied = True
+				break
+		
+		return occupied
+
+	def _check_headon_crash(self, a, rail, direction, maps):
+		next_rail = np.argmax(np.absolute(maps[a, :, 0]))
+		next_dir = maps[a, next_rail, 0]
+
+		# Check if rail is already occupied to compute new exit time
+		last, last_exit = self._last_train_on_rail(a, next_rail, maps) # TODO! check this
+
+		if last_exit > 0:
+			last_speed = self.env.agents[last].speed_data['speed']
+			last_tpc = int(np.reciprocal(last_speed)) # times per cell
+			# TODO! here
+			last_dir = maps[last, next_rail, 0] # TODO tpc cell
+			crash = last_dir != next_dir
+
+	def check_crash(self, a, maps, is_before_switch=False):
+		crash = False
+		agent = self.env.agents[a]
+
+		if agent.status == RailAgentStatus.READY_TO_DEPART:
+			# init_pos not occupied
+			next_pos = agent.initial_position
+			crash = _is_cell_occupied(a, next_pos)
+
+			# if not crash:
+				# TODO! headoncrash 
+
+		elif is_before_switch:
+			# TODO! headoncrash
+
+		else: # action_required
+			if len(self.paths[a]) > 0:
+				next_pos = self.paths[a][0].next_action_element.next_position
+				crash = _is_cell_occupied(a, next_pos)
+		return crash
 
 	def update_bitmaps(self, a, maps, is_before_switch=False):
 		# Calculate exit time when switching rail
@@ -252,7 +295,7 @@ class RailObsForRailEnv(ObservationBuilder):
 			next_dir = maps[a, next_rail, times_per_cell]
 
 			# Check if rail is already occupied to compute new exit time
-			last, last_exit = self._last_train_on_rail(maps, next_rail, a) # TODO! Check this
+			last, last_exit = self._last_train_on_rail(a, next_rail, maps) # TODO! Check this
 			if last_exit > 0: # TODO! check this return value
 				# times_per_cell: skips the first bits that are curr_rail
 				curr_exit = np.argmax(maps[a, next_rail, times_per_cell:] == 0)
@@ -366,7 +409,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		return bitmaps
 	
 	
-	def _last_train_on_rail(self, maps, rail, handle):
+	def _last_train_on_rail(self, a, rail, maps):
 		"""
 		Find train preceding agent 'handle' on rail.
 		:param maps: 
@@ -374,14 +417,30 @@ class RailObsForRailEnv(ObservationBuilder):
 		:param handle: 
 		:return: 
 		"""
-		l, l_exit = 0, 0 # Final train, its expected exit time
+		last, last_exit = 0, 0 # Final train, its expected exit time
 		
-		for a in range(self.env.get_num_agents()):
-			if not maps[a, rail, 0] == 0 and not a == handle:
-				it = np.argmax(maps[a, rail, :] == 0)
-				if it > l_exit: # If exit time of train a > my exit time
-					l, l_exit = a, it
-		return l, l_exit
+		for other in range(self.env.get_num_agents()):
+			speed = self.env.agents[other].speed_data['speed']
+			tpc = int(np.reciprocal(speed)) # times per cell
+
+			# We use tpc-1, to skip the first bits of trains that have decided
+			# to enter rail, but are still crossing the cell before
+			if other != a and maps[a, rail, tpc - 1] != 0:
+				other_rail = np.argmax(np.absolute(maps[other, :, 0]))
+				other_exit = 0
+
+				# Consider the time to cross the current cell
+				if other_rail != rail:
+					other_exit = np.argmax(maps[other, other_rail, :] == 0)
+
+				# TODO! CHECK
+				# Add the estimated exit time
+				other_exit += np.argmax(maps[other, rail, other_exit:] == 0)
+
+				if other_exit > last_exit: # If exit time of train a > my exit time
+					last, last_exit = other, other_exit
+
+		return last, last_exit
 	
 	def _get_trains_on_rails(self, maps, rail, handle):
 		"""
