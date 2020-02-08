@@ -186,35 +186,37 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		return action
 
-	def next_cell_occupied(self, handle):
-		occupied = False
+	# def next_cell_occupied(self, handle):
+	# 	occupied = False
 		
-		if self.paths[handle][0]:
-			next_pos = self.paths[handle][0].next_action_element.next_position
-			for agent in self.env.agents:
-				if agent.handle != handle and agent.position == next_pos:
-					occupied = True
-					break
-		else:
-			print('WHHHHAAAAT')
+	# 	if self.paths[handle][0]:
+	# 		next_pos = self.paths[handle][0].next_action_element.next_position
+	# 		for agent in self.env.agents:
+	# 			if agent.handle != handle and agent.position == next_pos:
+	# 				occupied = True
+	# 				break
+	# 	else:
+	# 		print('WHHHHAAAAT')
 
-		return occupied
+	# 	return occupied
 
-	def should_generate_altmaps(self, handle):
-		if len(self.paths[handle]) > 0:
-			curr_pos = self.env.agents[handle].position
-			next_pos = self.paths[handle][0].next_action_element.next_position
-			curr_rail, _ = self.get_edge_from_cell(curr_pos)
-			next_rail, _ = self.get_edge_from_cell(next_pos)
-			return curr_rail != -1 and next_rail == -1
-		else:
-			# This shouldn't happen, but it may happen
-			return True
 
+	# This should only be used by a train to delay itself
 	def delay(self, a, maps, rail, direction, delay):
-		# TODO! this doesn't consider the first bits of curr_rail
+		agent_speed = self.env.agents[a].speed_data['speed']
+		times_per_cell = int(np.reciprocal(agent_speed))
+		
+		old_rail = np.argmax(np.absolute(maps[a, :, 0]))
+		old_dir = maps[a, old_rail, 0]
+
 		maps[a] = np.roll(maps[a], delay)
-		maps[a, rail, 0:delay] = direction
+		# Reset the first bits
+		maps[a, :, 0:delay+times_per_cell] = 0 # TODO! check
+		# Fill the first with the current rail info
+		maps[a, old_rail, 0:times_per_cell] = old_dir
+		# Add delay to the next rail
+		maps[a, rail, times_per_cell:times_per_cell+delay] = direction
+		
 		return maps
 
 	def is_before_switch(self, a):
@@ -263,62 +265,6 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		maps = self.unroll_bitmap(a, maps)
 		return maps
-
-	def update_bitmapszz(self, a, network_action, bitmaps):
-		curr_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
-		curr_dir = bitmaps[a, curr_rail, 0]
-		action = None
-		crash = False
-
-		agent = self.env.agents[a]
-		if agent.status == RailAgentStatus.READY_TO_DEPART:
-			is_occupied = False
-			for i in range(len(self.env.agents)):
-				if i != a and self.env.agents[i].position == agent.initial_position:
-					is_occupied = True
-			# If its initial position is occupied or he shouldn't depart 
-			if ( network_action == 1 and is_occupied) or network_action == 0:
-				action = RailEnvActions.STOP_MOVING
-				return action, bitmaps, crash # TODO! Here crash must be true?
-
-		if network_action == 1:  # Go
-			# print("Advancing", a)
-			bitmaps[a, :, 0] = 0
-			bitmaps[a] = np.roll(bitmaps[a], -1)
-			# Find next rail and dir
-			next_rail = np.argmax(np.absolute(bitmaps[a, :, 0]))
-			next_dir = bitmaps[a, next_rail, 0]
-
-			if bitmaps[a, next_rail, 0] == 0:
-				print("Train {} has reached its target".format(a))
-				#assert agent.position == agent.target TODO
-				# TODO! adding action_required in main, you will never come here again
-			else:
-				# Check if rail is already occupied to compute new exit time
-				last, last_exit = self._last_train_on_rail(bitmaps, next_rail, a)
-				if last_exit > 0:
-					last_dir = bitmaps[last, next_rail, 0]
-					crash = last_dir != next_dir
-					if crash:
-						# print("{} CRASH with {}".format(a, last))
-						bitmaps = self.delay_schedule(a, bitmaps, curr_rail, curr_dir)
-						bitmaps[a] = np.roll(bitmaps[a], 1)
-						bitmaps[a, curr_rail, 0] = curr_dir
-						action = RailEnvActions.STOP_MOVING
-					else:
-						curr_exit_time = np.argmax(bitmaps[a, next_rail, :] == 0)
-						if curr_exit_time <= last_exit:
-							delay = last_exit + int(1 / self.env.agents[a].speed_data['speed']) - curr_exit_time
-							bitmaps = self.delay(a, bitmaps, next_rail, next_dir, delay)
-
-			if action == None:
-				action = self.get_agent_action(a)
-		else:
-			# print("Waiting")
-			action = RailEnvActions.STOP_MOVING
-			bitmaps = self.delay_schedule(a, bitmaps, curr_rail, curr_dir)
-
-		return action, bitmaps, crash
 
 	def _bitmap_from_cells_seq(self, handle, path) -> np.ndarray:
 		"""
