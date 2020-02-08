@@ -168,7 +168,8 @@ def main(args):
 					if network_action == 0:
 						action = RailEnvActions.DO_NOTHING
 					else: # Go
-						# crash = detect_crash() # TODO! implement
+						crash = obs_builder.check_crash(a, maps)
+						
 						# Store expereince
 						if crash and args.train:
 							dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
@@ -210,7 +211,7 @@ def main(args):
 					if network_action == 0:
 						action = RailEnvActions.STOP_MOVING
 					else:
-						# crash = detect_crash() # TODO! implement
+						crash = obs_builder.check_crash(a, maps, is_before_switch=True)
 						if crash and args.train:
 							dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
 						
@@ -227,7 +228,8 @@ def main(args):
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
 					
-					# crash = detect_crash() # TODO! implement
+					crash = obs_builder.check_crash(a, maps)
+
 					if crash: 	# TODO think about this
 						network_action = 0
 						action = RailEnvActions.STOP_MOVING
