@@ -16,3 +16,7 @@ WalkingElement = \
 # - edges are the possible transitions in the cell.
 Waypoint = NamedTuple(
     'Waypoint', [('position', Tuple[int, int]), ('direction', int)])
+
+
+CardinalNode = \
+	NamedTuple('CardinalNode', [('id_node', int), ('cardinal_point', int)])

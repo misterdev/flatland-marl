@@ -13,26 +13,7 @@ from flatland.envs.rail_env import RailEnvActions
 from flatland.envs.agent_utils import RailAgentStatus
 
 import src.utils.debug as debug
-
-
-CardinalNode = \
-	NamedTuple('CardinalNode', [('id_node', int), ('cardinal_point', int)])
-
-"""
-Things to figure out:
-- The observation acts considering that ALL agents start at once at the beginning, so at ts=0 they already have a position on the grid 
-Could be useful to have a limited number of agents contemporary active to control the number of bitmaps to feed to the network.
-- How to consider a switch: part of a rail, include it in the bitmap or not, etc. now there are rails connecting two switches 
- but they have length = 0 so switches are not considered in the bitmap.
-- The path to draw the bitmap must be recomputed at every ts, so maybe prediction depth so high (2000) is inefficient and unnecessary
-- TODO How to return the actions (for all the agents at once?)
-
-Current implementation:
-- Truncating the prediction at the point where target is reached (all 0s in the bitmap after target)
-- Prediction now doesn't consider if the agent is currently moving or not (so the bitmap still show all the path even though the agent is stopped)
-If it did, then we would have a row of 1/-1 in the bitmap. Both choices give wrong info about future moves.
-- Agents that are not departed yet see anyway all their path to the target on the bitmap.
-"""
+from src.utils.types import CardinalNode
 
 class RailObsForRailEnv(ObservationBuilder):
 	"""
@@ -55,10 +36,11 @@ class RailObsForRailEnv(ObservationBuilder):
 		"""
 		super(RailObsForRailEnv, self).__init__()
 		self.predictor = predictor
-		self.cells_sequence = {} # Dict handle : list of tuples representing cell positions
 		
+		self.num_agents = None
 		self.num_rails = None # Depends on the map, must be computed in reset()
 		self.max_time_steps = self.predictor.max_depth
+
 		# Not all of them are necessary
 		self.cell_to_id_node = {} # Map cell position : id_node
 		self.id_node_to_cell = {} # Map id_node to cell position
@@ -67,8 +49,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.id_edge_to_cells = {} # Map id_edge : list of tuples (cell pos, crossing dir) in rail (nodes are not counted)
 		self.nodes = set() # Set of node ids
 		self.edges = set() # Set of edge ids
-		
-		self.bitmaps = None
+
 		self.recompute_bitmap = True
 
 	def set_env(self, env: Environment):
@@ -87,23 +68,38 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.edges = set()
 		self._map_to_graph()
 		self.recompute_bitmap = True
+
+		self.num_agents = len(self.env.agents)
+
+		# Calculate agents timesteps per cell
+		self.tpc = dict()
+		for a in range(self.num_agents):
+			agent_speed = self.env.agents[a].speed_data['speed']
+			self.tpc[a] = int(np.reciprocal(agent_speed))
 		
-	def get_many(self, handles: Optional[List[int]] = None) -> Dict[int, np.ndarray]:
+	def get_many(self, handles: Optional[List[int]] = None):
+		maps = None
 		# Compute bitmaps from shortest paths
 		if self.recompute_bitmap:
+			self.recompute_bitmap = False
+
 			prediction_dict = self.predictor.get()
 			self.paths = self.predictor.shortest_paths
-			self.cells_sequence = self.predictor.compute_cells_sequence(prediction_dict)
-			self.bitmaps = self._get_many_bitmap(handles=[a for a in range(self.env.get_num_agents())])
-			self.recompute_bitmap = False
-		
-		observations = {}
-		return observations
+			cells_sequence = self.predictor.compute_cells_sequence(prediction_dict)
+
+			maps = np.zeros((self.num_agents, self.num_rails, self.max_time_steps + 1), dtype=int)
+			for a in range(self.num_agents):
+				maps[a, :, :] = self._bitmap_from_cells_seq(a, cells_sequence[a])
+
+			maps = np.roll(maps, 1)
+			maps[:, :, 0] = 0
+
+		return maps
 
 	def get_altmaps(self, handle):
 		agent = self.env.agents[handle]
 		altpaths, cells_seqs = self.predictor.get_altpaths(handle, self.cell_to_id_node)
-		bitmaps = []
+		maps = []
 		for i in range(len(cells_seqs)):
 			bitmap = self._bitmap_from_cells_seq(handle, cells_seqs[i])
 
@@ -112,25 +108,9 @@ class RailObsForRailEnv(ObservationBuilder):
 				bitmap[:, -1] = 0
 				bitmap = np.roll(bitmap, 1)
 
-			bitmaps.append(bitmap)
+			maps.append(bitmap)
 
-		return bitmaps, altpaths
-
-	def get_initial_bitmaps(self, print):
-		"""
-		Getter for bitmaps
-		:return: 
-		"""
-		bitmaps = np.roll(self.bitmaps, 1)
-		bitmaps[:, :, 0] = 0
-		if print:
-			debug.print_rails(self.env.height, self.env.height, self.id_node_to_cell, self.id_edge_to_cells)
-		return bitmaps
-
-	def unroll_bitmap(self, a, maps):
-		maps[a, :, 0] = 0
-		maps[a] = np.roll(maps[a], -1)
-		return maps
+		return maps, altpaths
 
 	def get_agent_action(self, handle):
 		agent = self.env.agents[handle]
@@ -162,24 +142,6 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		return action
 
-	# This should only be used by a train to delay itself
-	def delay(self, a, maps, rail, direction, delay):
-		agent_speed = self.env.agents[a].speed_data['speed']
-		times_per_cell = int(np.reciprocal(agent_speed))
-		
-		old_rail = np.argmax(np.absolute(maps[a, :, 0]))
-		old_dir = maps[a, old_rail, 0]
-
-		maps[a] = np.roll(maps[a], delay)
-		# Reset the first bits
-		maps[a, :, 0:delay+times_per_cell] = 0 # TODO! check
-		# Fill the first with the current rail info
-		maps[a, old_rail, 0:times_per_cell] = old_dir
-		# Add delay to the next rail
-		maps[a, rail, times_per_cell:times_per_cell+delay] = direction
-		
-		return maps
-
 	def is_before_switch(self, a):
 		agent = self.env.agents[a]
 		before_switch = False
@@ -188,8 +150,8 @@ class RailObsForRailEnv(ObservationBuilder):
 			if len(self.paths[a]) > 0:
 				curr_pos = agent.position
 				next_pos = self.paths[a][0].next_action_element.next_position
-				curr_rail, _ = self.get_edge_from_cell(curr_pos)
-				next_rail, _ = self.get_edge_from_cell(next_pos)
+				curr_rail, _ = self._get_edge_from_cell(curr_pos)
+				next_rail, _ = self._get_edge_from_cell(next_pos)
 				before_switch = curr_rail != -1 and next_rail == -1
 			else:
 				# This shouldn't happen, but it may happen
@@ -199,6 +161,22 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		return before_switch
 
+	# This should only be used by a train to delay itself
+	def _delay(self, a, maps, rail, direction, delay):
+		tpc = self.tpc[a]
+
+		old_rail = np.argmax(np.absolute(maps[a, :, 0]))
+		old_dir = maps[a, old_rail, 0]
+
+		maps[a] = np.roll(maps[a], delay)
+		# Reset the first bits
+		maps[a, :, 0:delay+tpc] = 0
+		# Fill the first with the current rail info
+		maps[a, old_rail, 0:tpc] = old_dir
+		# Add delay to the next rail
+		maps[a, rail, tpc:tpc+delay] = direction
+		
+		return maps
 
 	def _is_cell_occupied(self, a, cell):
 		occupied = False
@@ -217,10 +195,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		last, last_exit = self._last_train_on_rail(a, rail, maps)
 
 		if last_exit > 0:
-			last_speed = self.env.agents[last].speed_data['speed']
-			last_tpc = int(np.reciprocal(last_speed)) # times per cell
-
-			# last_exit-1 instead of 0, because in 0 it may crossing the last
+			# last_exit-1 instead of 0, because in 0 it may be crossing the last
 			# cell before the switch
 			last_dir = maps[last, rail, last_exit - 1]
 			crash = last_dir != direction
@@ -237,9 +212,6 @@ class RailObsForRailEnv(ObservationBuilder):
 			crash = self._is_cell_occupied(a, next_pos)
 
 			if not crash:
-				speed = self.env.agents[a].speed_data['speed']
-				tpc = int(np.reciprocal(speed)) # times per cell
-
 				# We should skip the first bit that is 0
 				rail = np.argmax(np.absolute(maps[a, :, 1]))
 				direction = maps[a, rail, 1]
@@ -247,8 +219,7 @@ class RailObsForRailEnv(ObservationBuilder):
 				crash = self._check_headon_crash(a, rail, direction, maps)
 
 		elif is_before_switch:
-			speed = self.env.agents[a].speed_data['speed']
-			tpc = int(np.reciprocal(speed)) # times per cell
+			tpc = self.tpc[a]
 
 			next_rail = np.argmax(np.absolute(maps[a, :, tpc]))
 			next_dir = maps[a, next_rail, tpc]
@@ -265,127 +236,26 @@ class RailObsForRailEnv(ObservationBuilder):
 	def update_bitmaps(self, a, maps, is_before_switch=False):
 		# Calculate exit time when switching rail
 		if is_before_switch:
+			tpc = self.tpc[a]
 
-			agent_speed = self.env.agents[a].speed_data['speed']
-			times_per_cell = int(np.reciprocal(agent_speed))
-
-			next_rail = np.argmax(np.absolute(maps[a, :, times_per_cell]))
-			next_dir = maps[a, next_rail, times_per_cell]
+			next_rail = np.argmax(np.absolute(maps[a, :, tpc]))
+			next_dir = maps[a, next_rail, tpc]
 
 			# Check if rail is already occupied to compute new exit time
 			last, last_exit = self._last_train_on_rail(a, next_rail, maps)
 			if last_exit > 0:
-				# times_per_cell: skips the first bits that are curr_rail
-				curr_exit = np.argmax(maps[a, next_rail, times_per_cell:] == 0)
+				# tpc: skips the first bits that are curr_rail
+				curr_exit = np.argmax(maps[a, next_rail, tpc:] == 0)
 				# Also consider the last cell of curr_rail
-				curr_exit += times_per_cell
+				curr_exit += tpc
 				# TODO? something changes if the last id is > or <  ?
 				if curr_exit <= last_exit:
-					delay = last_exit + times_per_cell - curr_exit
-					maps = self.delay(a, maps, next_rail, next_dir, delay)
+					delay = last_exit + tpc - curr_exit
+					maps = self._delay(a, maps, next_rail, next_dir, delay)
 
-		maps = self.unroll_bitmap(a, maps)
+		maps[a, :, 0] = 0
+		maps[a] = np.roll(maps[a], -1)
 		return maps
-
-	def _bitmap_from_cells_seq(self, handle, path) -> np.ndarray:
-		"""
-		Compute bitmap for agent handle, given a selected path.
-		:param handle: 
-		:return: 
-		"""
-		bitmap = np.zeros((self.num_rails, self.max_time_steps + 1), dtype=int)  # Max steps in the future + current ts
-		agent = self.env.agents[handle]
-		# Truncate path in the future, after reaching target
-		target_index = [i for i, pos in enumerate(path) if pos[0] == agent.target[0] and pos[1] == agent.target[1]]
-		if len(target_index) != 0:
-			target_index = target_index[0]
-			path = path[:target_index + 1]
-
-		# Add 0 at first ts - for 'not departed yet'
-		rail, _ = self.get_edge_from_cell(path[0])
-
-		# Agent's cardinal node, where it entered the last edge
-		agent_entry_node = None
-		# Calculate initial edge entry point
-		i = 0
-		rail, _ = self.get_edge_from_cell(path[i])
-		if rail != -1: # If it's on an edge
-			initial_rail = rail
-			# Search first switch
-			while rail != -1:
-				i += 1
-				rail, _ = self.get_edge_from_cell(path[i])
-
-			src, dst, _ = self.info[initial_rail]
-			node_id = self.cell_to_id_node[path[i]]
-			# Reversed because we want the switch's cp
-			entry_cp = self._reverse_dir(direction_to_point(path[i-1], path[i]))
-			# If we reach the dst node
-			if (node_id, entry_cp) == dst:
-				# We entered from the src node (cross_dir = 1)
-				agent_entry_node = src
-			# Otherwise the opposite
-			elif (node_id, entry_cp) == src: 
-				agent_entry_node = dst
-		else:
-			#Handle the case you call this while on a switch before a rail
-			node_id = self.cell_to_id_node[path[i]]
-			# Calculate exit direction (that's the entry cp for the next edge)
-			cp = direction_to_point(path[0], path[1]) # it's ok
-			# Not reversed because it's already relative to a switch
-			agent_entry_node = CardinalNode(node_id, cp)
-
-
-		holes = 0
-		# Fill rail occupancy according to predicted position at ts
-		for ts in range(0, len(path)):
-			cell = path[ts]
-			# Find rail associated to cell
-			rail, _ = self.get_edge_from_cell(cell)
-			# Find crossing direction
-			if rail == -1: # Agent is on a switch
-				holes += 1
-				# Skip duplicated cells (for agents with fractional speed)
-				if cell != path[ts+1]: # TODO Index out of list, only when different speed profiles are enabled
-					node_id = self.cell_to_id_node[cell]
-					# Calculate exit direction (that's the entry cp for the next edge)
-					cp = direction_to_point(cell, path[ts+1])
-					# Not reversed because it's already relative to a switch
-					agent_entry_node = CardinalNode(node_id, cp)
-			else: # Agent is on a rail
-				crossing_dir = None
-				src, dst, _ = self.info[rail]
-				if agent_entry_node == dst:
-					crossing_dir = 1
-				elif agent_entry_node == src: 
-					crossing_dir = -1
-
-				assert crossing_dir != None
-
-				bitmap[rail, ts] = crossing_dir
-
-				if holes > 0:
-					bitmap[rail, ts-holes:ts] = crossing_dir
-					holes = 0
-
-		assert(holes == 0, "All the cells of the bitmap should be filled")
-
-		temp = np.any(bitmap[:, 1:(len(path)-1)] != 0, axis=0)
-		assert(np.all(temp), "Thee agent's bitmap shouldn't have holes ")
-		return bitmap
-		
-	def _get_many_bitmap(self, handles: Optional[List[int]] = None) -> np.ndarray:
-		"""
-		This function computes the bitmaps and returns them, bitmaps are *strictly not* observations.
-		:return: 
-		"""
-		bitmaps = np.zeros((len(handles), self.num_rails, self.max_time_steps + 1), dtype=int)
-		# Stack bitmaps
-		for a in range(len(handles)):
-			bitmaps[a, :, :] = self._bitmap_from_cells_seq(a, self.cells_sequence[a])
-
-		return bitmaps
-	
 	
 	def _last_train_on_rail(self, a, rail, maps):
 		"""
@@ -421,15 +291,8 @@ class RailObsForRailEnv(ObservationBuilder):
 					last, last_exit = other, other_exit
 
 		return last, last_exit
-	
-	def _get_trains_on_rails(self, maps, rail, handle):
-		"""
 
-		:param maps: 
-		:param rail: 
-		:param handle: 
-		:return: 
-		"""
+	def _get_trains_on_rails(self, maps, rail, handle):
 		trains = []
 		for a in range(self.env.get_num_agents()):
 			if not (maps[a, rail, 0] == 0 or a == handle):
@@ -438,7 +301,108 @@ class RailObsForRailEnv(ObservationBuilder):
 		trains.sort()
 		
 		return trains
-		
+
+	def _get_edge_from_cell(self, cell):
+		"""
+
+		:param cell: Cell for which we want to find the associated rail id.
+		:return: A tuple (id rail, dist) where dist is the distance as offset from the beginning of the rail.
+		"""
+
+		for edge in self.id_edge_to_cells.keys():
+			cells = [cell[0] for cell in self.id_edge_to_cells[edge]] 
+			if cell in cells:
+				return edge, cells.index(cell)
+
+		return -1, -1  # Node
+
+	def _bitmap_from_cells_seq(self, handle, path) -> np.ndarray:
+		"""
+		Compute bitmap for agent handle, given a selected path.
+		:param handle: 
+		:return: 
+		"""
+		bitmap = np.zeros((self.num_rails, self.max_time_steps + 1), dtype=int)  # Max steps in the future + current ts
+		agent = self.env.agents[handle]
+		# Truncate path in the future, after reaching target
+		target_index = [i for i, pos in enumerate(path) if pos[0] == agent.target[0] and pos[1] == agent.target[1]]
+		if len(target_index) != 0:
+			target_index = target_index[0]
+			path = path[:target_index + 1]
+
+		# Add 0 at first ts - for 'not departed yet'
+		rail, _ = self._get_edge_from_cell(path[0])
+
+		# Agent's cardinal node, where it entered the last edge
+		agent_entry_node = None
+		# Calculate initial edge entry point
+		i = 0
+		rail, _ = self._get_edge_from_cell(path[i])
+		if rail != -1: # If it's on an edge
+			initial_rail = rail
+			# Search first switch
+			while rail != -1:
+				i += 1
+				rail, _ = self._get_edge_from_cell(path[i])
+
+			src, dst, _ = self.info[initial_rail]
+			node_id = self.cell_to_id_node[path[i]]
+			# Reversed because we want the switch's cp
+			entry_cp = self._reverse_dir(direction_to_point(path[i-1], path[i]))
+			# If we reach the dst node
+			if (node_id, entry_cp) == dst:
+				# We entered from the src node (cross_dir = 1)
+				agent_entry_node = src
+			# Otherwise the opposite
+			elif (node_id, entry_cp) == src: 
+				agent_entry_node = dst
+		else:
+			#Handle the case you call this while on a switch before a rail
+			node_id = self.cell_to_id_node[path[i]]
+			# Calculate exit direction (that's the entry cp for the next edge)
+			cp = direction_to_point(path[0], path[1]) # it's ok
+			# Not reversed because it's already relative to a switch
+			agent_entry_node = CardinalNode(node_id, cp)
+
+
+		holes = 0
+		# Fill rail occupancy according to predicted position at ts
+		for ts in range(0, len(path)):
+			cell = path[ts]
+			# Find rail associated to cell
+			rail, _ = self._get_edge_from_cell(cell)
+			# Find crossing direction
+			if rail == -1: # Agent is on a switch
+				holes += 1
+				# Skip duplicated cells (for agents with fractional speed)
+				if cell != path[ts+1]: # TODO Index out of list, only when different speed profiles are enabled
+					node_id = self.cell_to_id_node[cell]
+					# Calculate exit direction (that's the entry cp for the next edge)
+					cp = direction_to_point(cell, path[ts+1])
+					# Not reversed because it's already relative to a switch
+					agent_entry_node = CardinalNode(node_id, cp)
+			else: # Agent is on a rail
+				crossing_dir = None
+				src, dst, _ = self.info[rail]
+				if agent_entry_node == dst:
+					crossing_dir = 1
+				elif agent_entry_node == src: 
+					crossing_dir = -1
+
+				assert crossing_dir != None
+
+				bitmap[rail, ts] = crossing_dir
+
+				if holes > 0:
+					bitmap[rail, ts-holes:ts] = crossing_dir
+					holes = 0
+
+		assert(holes == 0, "All the cells of the bitmap should be filled")
+
+		temp = np.any(bitmap[:, 1:(len(path)-1)] != 0, axis=0)
+		assert(np.all(temp), "Thee agent's bitmap shouldn't have holes ")
+		return bitmap
+
 	# Slightly modified wrt to the other
 	def _map_to_graph(self):
 		"""
@@ -542,20 +506,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.nodes = nodes # Set of nodes
 		self.edges = self.info.keys() # Set of edges
 		self.num_rails = len(self.edges)
-
-	def get_edge_from_cell(self, cell):
-		"""
-
-		:param cell: Cell for which we want to find the associated rail id.
-		:return: A tuple (id rail, dist) where dist is the distance as offset from the beginning of the rail.
-		"""
-
-		for edge in self.id_edge_to_cells.keys():
-			cells = [cell[0] for cell in self.id_edge_to_cells[edge]] 
-			if cell in cells:
-				return edge, cells.index(cell)
-
-		return -1, -1  # Node
 
 	@staticmethod
 	def _reverse_dir(direction):

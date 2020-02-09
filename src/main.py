@@ -118,9 +118,8 @@ def main(args):
 	for ep in range(args.num_episodes):
 		cumulative_reward = 0
 		env_done = 0
-		
-		_, info = env.reset()
-		maps = obs_builder.get_initial_bitmaps(args.print)
+
+		maps, info = env.reset()
 
 		if args.print:
 			debug.print_bitmaps(maps)
