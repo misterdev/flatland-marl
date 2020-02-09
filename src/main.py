@@ -294,13 +294,12 @@ def main(args):
 
 		# Print training results info
 		print(
-			'\r{} Agents on ({},{}). Episode: {}\t Mean done agents: {:.2f}\t Mean reward: {:.2f}\t Mean normalized reward: {:.2f}\t Done agents in last episode: {:.2f}%\t Epsilon: {:.2f}'.format(
+			'\r{} Agents on ({},{}). Episode: {}\t Mean done agents: {:.2f}\t Mean reward: {:.2f}\t Mean normalized reward: {:.2f}\t Epsilon: {:.2f}'.format(
 				env.get_num_agents(), args.width, args.height,
 				ep,
 				mean_agent_dones[-1],  # Fraction of done agents
 				mean_rewards[-1],
 				mean_norm_rewards[-1],
-				(num_agents_done / args.num_agents),
 				eps), end=" ")
 
 		if ep != 0 and (ep + 1) % args.checkpoint_interval == 0:
@@ -323,7 +322,7 @@ def main(args):
 
 if __name__ == '__main__':
 	
-	parser = argparse.ArgumentParser(description='Railobs')
+	parser = argparse.ArgumentParser(description='RailObs')
 	# Env parameters
 	parser.add_argument('--network-action-space', type=int, default=2, help='Number of actions allowed in the environment')
 	parser.add_argument('--width', type=int, default=20, help='Environment width')
