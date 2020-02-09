@@ -152,7 +152,7 @@ def main(args):
 					# TODO? Sure?
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
-
+					
 				# If agent is not departed
 				elif agent.status == RailAgentStatus.READY_TO_DEPART:
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
@@ -180,7 +180,7 @@ def main(args):
 						else:
 							maps = obs_builder.update_bitmaps(a, maps)
 							action = obs_builder.get_agent_action(a)
-				
+		
 				# If the agent is entering a switch
 				elif obs_builder.is_before_switch(a) and info['action_required'][a]:
 					update_values[a] = True
@@ -217,11 +217,11 @@ def main(args):
 						
 						if crash:
 							network_action = 0
-							action = RailEnvActions.DO_NOTHING
+							action = RailEnvActions.STOP_MOVING
 						else:
 							action = obs_builder.get_agent_action(a)
 							maps = obs_builder.update_bitmaps(a, maps, is_before_switch=True)
-				
+		
 				# If the agent is following a rail
 				elif info['action_required'][a]:
 					update_values[a] = True # TODO Sure?
