@@ -51,12 +51,10 @@ class RailObsForRailEnv(ObservationBuilder):
 
 	def __init__(self, predictor):
 		"""
-	
 		:param predictor: class that predicts the path.
 		"""
 		super(RailObsForRailEnv, self).__init__()
 		self.predictor = predictor
-		self.prediction_dict = {}  # Dict handle : list of tuples representing prediction steps
 		self.cells_sequence = {} # Dict handle : list of tuples representing cell positions
 		
 		self.num_rails = None # Depends on the map, must be computed in reset()
@@ -74,21 +72,12 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.recompute_bitmap = True
 
 	def set_env(self, env: Environment):
-		"""
-	
-		:param env: 
-		:return: 
-		"""
 		super().set_env(env)
 		if self.predictor:
 			# Use set_env available in PredictionBuilder (parent class)
 			self.predictor.set_env(self.env)
 
 	def reset(self):
-		"""
-		
-		:return: 
-		"""
 		self.cell_to_id_node = {}
 		self.id_node_to_cell = {}
 		self.connections = {}
@@ -100,17 +89,11 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.recompute_bitmap = True
 		
 	def get_many(self, handles: Optional[List[int]] = None) -> Dict[int, np.ndarray]:
-		"""
-		
-		:param handles: 
-		:return: 
-		"""
-		
 		# Compute bitmaps from shortest paths
 		if self.recompute_bitmap:
-			self.prediction_dict = self.predictor.get()
+			prediction_dict = self.predictor.get()
 			self.paths = self.predictor.shortest_paths
-			self.cells_sequence = self.predictor.compute_cells_sequence(self.prediction_dict)
+			self.cells_sequence = self.predictor.compute_cells_sequence(prediction_dict)
 			self.bitmaps = self._get_many_bitmap(handles=[a for a in range(self.env.get_num_agents())])
 			self.recompute_bitmap = False
 		
@@ -123,12 +106,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		bitmaps = []
 		for i in range(len(cells_seqs)):
 			bitmap = self._bitmap_from_cells_seq(handle, cells_seqs[i])
-			# We should have only 1
-			# steps = int(1 / agent.speed_data['speed']) - 1
-			# if steps > 0:
-			# 	for s in range(steps):
-			# 		bitmap[:, 0] = 0
-			# 		bitmap = np.roll(bitmap, -1)
 
 			# If agent not departed, add 0 at the beginning
 			if agent.status == RailAgentStatus.READY_TO_DEPART:
@@ -148,7 +125,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		bitmaps[:, :, 0] = 0
 		if print:
 			debug.print_rails(self.env.height, self.env.height, self.id_node_to_cell, self.id_edge_to_cells)
-			debug.print_cells_sequence(self.env.height, self.env.width, self.cells_sequence)
 		return bitmaps
 
 	def unroll_bitmap(self, a, maps):
@@ -185,21 +161,6 @@ class RailObsForRailEnv(ObservationBuilder):
 				self.paths[handle] = self.paths[handle][1:]
 
 		return action
-
-	# def next_cell_occupied(self, handle):
-	# 	occupied = False
-		
-	# 	if self.paths[handle][0]:
-	# 		next_pos = self.paths[handle][0].next_action_element.next_position
-	# 		for agent in self.env.agents:
-	# 			if agent.handle != handle and agent.position == next_pos:
-	# 				occupied = True
-	# 				break
-	# 	else:
-	# 		print('WHHHHAAAAT')
-
-	# 	return occupied
-
 
 	# This should only be used by a train to delay itself
 	def delay(self, a, maps, rail, direction, delay):

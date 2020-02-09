@@ -118,25 +118,23 @@ def main(args):
 	for ep in range(args.num_episodes):
 		cumulative_reward = 0
 		env_done = 0
+		
 		_, info = env.reset()
-		if args.render:
-			env_renderer.reset()
 		maps = obs_builder.get_initial_bitmaps(args.print)
 
 		if args.print:
 			debug.print_bitmaps(maps)
 
+		if args.render:
+			env_renderer.reset()
+
 		for step in range(max_steps - 1):
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
-				network_action = None
-
-				crash = False
-
 				agent = env.agents[a]
-				# TODO evaluate those only once
-				agent_speed = agent.speed_data["speed"]
-				times_per_cell = int(np.reciprocal(agent_speed))
+				network_action = None
+				action = None
+				crash = False
 
 				# If agent is arrived
 				if agent.status == RailAgentStatus.DONE or agent.status == RailAgentStatus.DONE_REMOVED:
@@ -145,13 +143,9 @@ def main(args):
 					update_values[a] = False
 					# TODO if agent !removed you should leave a bit in the bitmap
 					# TODO? set bitmap only the first time
-					maps[a, :, :] = 0 
+					maps[a, :, :] = 0
 					network_action = 0
 					action = RailEnvActions.DO_NOTHING
-
-					# TODO? Sure?
-					obs = preprocess_obs(a, maps[a], maps, max_rails)
-					buffer_obs[a] = obs.copy()
 					
 				# If agent is not departed
 				elif agent.status == RailAgentStatus.READY_TO_DEPART:
@@ -159,7 +153,8 @@ def main(args):
 					buffer_obs[a] = obs.copy()
 					update_values[a] = True # TODO? are you sure?
 					
-					q_values = dqn.act(obs).cpu().data.numpy() # Network chooses action
+					# Network chooses action
+					q_values = dqn.act(obs).cpu().data.numpy()
 					if np.random.random() > eps:
 						network_action = np.argmax(q_values)
 					else:
@@ -212,6 +207,7 @@ def main(args):
 						action = RailEnvActions.STOP_MOVING
 					else:
 						crash = obs_builder.check_crash(a, maps, is_before_switch=True)
+
 						if crash and args.train:
 							dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
 						
@@ -252,7 +248,6 @@ def main(args):
 				railenv_action_dict.update({a: action})
 
 			# Obs is computed from bitmaps while state is computed from env step (temporarily)
-			# TODO? return bitmaps as state?
 			_, reward, done, info = env.step(railenv_action_dict)  # Env step
 
 			if args.render:
@@ -280,9 +275,8 @@ def main(args):
 			
 			for a in range(env.get_num_agents()):	
 				cumulative_reward += reward[a] # / env.get_num_agents() # Update cumulative reward (not norm)
-				
-				
-			if done['__all__']: # TODO!: env sets done[all] = True for everyone when time limit is reached
+			
+			if done['__all__']: # TODO! env sets done[all] = True for everyone when time limit is reached
 				env_done = 1
 				break
 
