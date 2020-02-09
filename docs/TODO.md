@@ -5,12 +5,8 @@
 ### Backlog
 - [ ] Permutation of binaries in bitmap relative to the current train
 - [ ] Replace numbers with RailenvActions
-- [ ] ? return observation from env.step
+- [ ] return observation from env.step
 - [ ] Handle malfunctions
-
-### Utilities
-- [ ] get agent tpc (times per cell)
-- [ ] get agent rail and dir
 
 ### TODO
 - [ ] FIX replay buffer & update_values

@@ -161,12 +161,16 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		return before_switch
 
+	def _get_rail_dir(self, a, maps, ts=0):
+		rail = np.argmax(np.absolute(maps[a, :, ts]))
+		direction = maps[a, rail, ts]
+		return rail, direction
+
 	# This should only be used by a train to delay itself
 	def _delay(self, a, maps, rail, direction, delay):
 		tpc = self.tpc[a]
 
-		old_rail = np.argmax(np.absolute(maps[a, :, 0]))
-		old_dir = maps[a, old_rail, 0]
+		old_rail, old_dir = self._get_rail_dir(a, maps)
 
 		maps[a] = np.roll(maps[a], delay)
 		# Reset the first bits
@@ -213,17 +217,12 @@ class RailObsForRailEnv(ObservationBuilder):
 
 			if not crash:
 				# We should skip the first bit that is 0
-				rail = np.argmax(np.absolute(maps[a, :, 1]))
-				direction = maps[a, rail, 1]
-
+				rail, direction = self._get_rail_dir(a, maps, ts=1)
 				crash = self._check_headon_crash(a, rail, direction, maps)
 
 		elif is_before_switch:
 			tpc = self.tpc[a]
-
-			next_rail = np.argmax(np.absolute(maps[a, :, tpc]))
-			next_dir = maps[a, next_rail, tpc]
-	
+			next_rail, next_dir = self._get_rail_dir(a, maps, ts=tpc)
 			crash = self._check_headon_crash(a, next_rail, next_dir, maps)
 
 		else: # action_required
@@ -237,9 +236,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		# Calculate exit time when switching rail
 		if is_before_switch:
 			tpc = self.tpc[a]
-
-			next_rail = np.argmax(np.absolute(maps[a, :, tpc]))
-			next_dir = maps[a, next_rail, tpc]
+			next_rail, next_dir = self._get_rail_dir(a, maps, ts=tpc)
 
 			# Check if rail is already occupied to compute new exit time
 			last, last_exit = self._last_train_on_rail(a, next_rail, maps)
@@ -276,7 +273,7 @@ class RailObsForRailEnv(ObservationBuilder):
 			# If an agent has not yet decided in tpc-1 it will be in the old rail 
 			if other != a and maps[other, rail, tpc - 1] != 0:
 				# TODO! check if train is departed or not
-				other_rail = np.argmax(np.absolute(maps[other, :, 0]))
+				other_rail, _ = self._get_rail_dir(other, maps)
 				other_exit = 0
 
 				# Consider the time to cross the current cell

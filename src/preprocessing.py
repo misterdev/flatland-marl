@@ -58,8 +58,6 @@ def get_heatmap(handle, bitmaps, max_rails):
     # plt.imshow(image)
     # plt.show()
 
-
-
 def preprocess_obs(handle, bitmap, maps, max_rails):
     """
     
