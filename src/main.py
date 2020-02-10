@@ -145,12 +145,12 @@ def main(args):
 					maps[a, :, :] = 0
 					network_action = 0
 					action = RailEnvActions.DO_NOTHING
-					
+
 				# If agent is not departed
 				elif agent.status == RailAgentStatus.READY_TO_DEPART:
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
-					update_values[a] = True # TODO? are you sure?
+					update_values[a] = True
 					
 					# Network chooses action
 					q_values = dqn.act(obs).cpu().data.numpy()
@@ -177,7 +177,6 @@ def main(args):
 		
 				# If the agent is entering a switch
 				elif obs_builder.is_before_switch(a) and info['action_required'][a]:
-					update_values[a] = True
 					# NOTE this is executed multiple times if the dqn choice is 0
 					altmaps, altpaths = obs_builder.get_altmaps(a)
 
@@ -199,8 +198,10 @@ def main(args):
 
 					# Use new bitmaps and paths
 					maps[a, :, :] = altmaps[best_i]
-					obs_builder.paths[a] = altpaths[best_i]
-					obs = altobs[best_i]
+					obs_builder.paths[a] = altpaths[best_i] # TODO use a function
+
+					buffer_obs[a] = altobs[best_i].copy()
+					update_values[a] = True
 
 					if network_action == 0:
 						action = RailEnvActions.STOP_MOVING
@@ -219,23 +220,28 @@ def main(args):
 		
 				# If the agent is following a rail
 				elif info['action_required'][a]:
-					update_values[a] = True # TODO Sure?
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
+					update_values[a] = False # TODO are you sure? YES
 					
 					crash = obs_builder.check_crash(a, maps)
 
-					if crash: 	# TODO think about this
+					if crash and args.train:  # TODO are you sure? NO
+						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
+
+					if crash:
 						network_action = 0
 						action = RailEnvActions.STOP_MOVING
-						# TODO? store bad experience
 					else:
 						network_action = 1
 						action = obs_builder.get_agent_action(a)
 						maps = obs_builder.update_bitmaps(a, maps)
 
 				else: # not action_required
+					obs = preprocess_obs(a, maps[a], maps, max_rails)
+					buffer_obs[a] = obs.copy()
 					update_values[a] = False
+
 					network_action = 1
 					action = RailEnvActions.DO_NOTHING
 					maps = obs_builder.update_bitmaps(a, maps)
