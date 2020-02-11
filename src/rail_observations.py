@@ -263,16 +263,25 @@ class RailObsForRailEnv(ObservationBuilder):
 		:return: 
 		"""
 		last, last_exit = 0, 0 # Final train, its expected exit time
-		
+
 		for other in range(self.env.get_num_agents()):
-			speed = self.env.agents[other].speed_data['speed']
-			tpc = int(np.reciprocal(speed)) # times per cell
+			if other == a or self.env.agents[other].status == RailAgentStatus.READY_TO_DEPART:
+				continue
+
+			tpc = self.tpc[other]
+
+			# If agent is already on this rail
+			if maps[other, rail, 0] != 0:
+				# Add the estimated exit time
+				other_exit = np.argmax(maps[other, rail, :] == 0)
+
+				if other_exit > last_exit:
+					last, last_exit = other, other_exit
 
 			# We use tpc-1, to skip the first bits of trains that have decided
 			# to enter rail, but are still crossing the cell before
 			# If an agent has not yet decided in tpc-1 it will be in the old rail 
-			if other != a and maps[other, rail, tpc - 1] != 0:
-				# TODO! check if train is departed or not
+			elif maps[other, rail, tpc - 1] != 0:
 				other_rail, _ = self._get_rail_dir(other, maps)
 				other_exit = 0
 
@@ -284,7 +293,7 @@ class RailObsForRailEnv(ObservationBuilder):
 				# Add the estimated exit time
 				other_exit += np.argmax(maps[other, rail, other_exit:] == 0)
 
-				if other_exit > last_exit: # If exit time of train a > my exit time
+				if other_exit > last_exit:
 					last, last_exit = other, other_exit
 
 		return last, last_exit

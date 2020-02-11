@@ -4,12 +4,11 @@
 
 ### Backlog
 - [ ] Permutation of binaries in bitmap relative to the current train
-- [ ] Replace numbers with RailenvActions
 - [ ] return observation from env.step
 - [ ] Handle malfunctions
 
 ### TODO
-- [ ] FIX replay buffer & update_values
+- [ ] Calculate altpaths once
 - [ ] FIX
     ```
         Traceback (most recent call last):
