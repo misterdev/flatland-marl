@@ -9,8 +9,8 @@
 
 ### TODO
 - [ ] Calculate altpaths once
-- [ ] giulia's error. NOTE: it has to do with prediction depth
-- [ ] FIX
+- [x] giulia's error. NOTE: it has to do with prediction depth
+- [x] FIX
     ```
         Traceback (most recent call last):
     File "src/main.py", line 370, in <module>
@@ -19,24 +19,7 @@
         best_i = np.random.choice(np.arange(len(altmaps)))
     File "mtrand.pyx", line 773, in numpy.random.mtrand.RandomState.choice
     ValueError: 'a' cannot be empty unless no samples are taken
-    ```
-- [ ] FIX
-    ```
-    4 Agents on (20,20). Episode: 949        Mean done agents: 0.23  Mean reward: -372.12    Mean normalized reward: -0.77   Epsilon: 0.15
-    [WARN] agent's 0 path run out
-    [WARN] agent's 0 path run out
-    [WARN] agent's 0 path run out
-    Traceback (most recent call last):
-    File "src/main.py", line 379, in <module>
-    File "src/main.py", line 194, in main
-        best_i = argmax // 2
-    File "<__array_function__ internals>", line 6, in argmax
-    File "/home/devid/anaconda3/envs/flatcla/lib/python3.6/site-packages/numpy/core/fromnumeric.py", line 1153, in argmax
-        return _wrapfunc(a, 'argmax', axis=axis, out=out)
-    File "/home/devid/anaconda3/envs/flatcla/lib/python3.6/site-packages/numpy/core/fromnumeric.py", line 61, in _wrapfunc
-        return bound(*args, **kwds)
-    ValueError: attempt to get argmax of an empty sequence
-    ```
+```
 
 
 # Results

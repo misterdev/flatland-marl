@@ -384,7 +384,7 @@ class RailObsForRailEnv(ObservationBuilder):
 			if rail == -1: # Agent is on a switch
 				holes += 1
 				# Skip duplicated cells (for agents with fractional speed)
-				if cell != path[ts+1]: # TODO Index out of list, only when different speed profiles are enabled
+				if ts+1 < len(path) and cell != path[ts+1]:
 					node_id = self.cell_to_id_node[cell]
 					# Calculate exit direction (that's the entry cp for the next edge)
 					cp = direction_to_point(cell, path[ts+1])
