@@ -128,6 +128,7 @@ def main(args):
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
 				agent = env.agents[a]
+				update_values[a] = False
 				network_action = None
 				action = None
 				crash = False
@@ -177,28 +178,31 @@ def main(args):
 					# NOTE this is executed multiple times if the dqn choice is 0
 					altmaps, altpaths = obs_builder.get_altmaps(a)
 
-					q_values = np.array([])
-					altobs = []
-					for i in range(len(altmaps)):
-						obs = preprocess_obs(a, altmaps[i], maps, max_rails)
-						altobs.append(obs)
-						q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
+					if len(altmaps) > 0:
+						q_values = np.array([])
+						altobs = []
+						for i in range(len(altmaps)):
+							obs = preprocess_obs(a, altmaps[i], maps, max_rails)
+							altobs.append(obs)
+							q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
 
-					# Epsilon-greedy action selection
-					if np.random.random() > eps:
-						argmax = np.argmax(q_values)
-						network_action = argmax % 2
-						best_i = argmax // 2
+						# Epsilon-greedy action selection
+						if np.random.random() > eps:
+							argmax = np.argmax(q_values)
+							network_action = argmax % 2
+							best_i = argmax // 2
+						else:
+							network_action = np.random.choice([0, 1])
+							best_i = np.random.choice(np.arange(len(altmaps)))
+							# Use new bitmaps and paths
+							maps[a, :, :] = altmaps[best_i]
+							obs_builder.set_agent_path(a, altpaths[best_i])
+
+							buffer_obs[a] = altobs[best_i].copy()
+							update_values[a] = True
 					else:
-						network_action = np.random.choice([0, 1])
-						best_i = np.random.choice(np.arange(len(altmaps)))
-
-					# Use new bitmaps and paths
-					maps[a, :, :] = altmaps[best_i]
-					obs_builder.set_agent_path(a, altpaths[best_i])
-
-					buffer_obs[a] = altobs[best_i].copy()
-					update_values[a] = True
+						print('[ERROR] NO ALTHPATHS EP: {} STEP: {} AGENT: {}', ep, step, a)
+						network_action = 0
 
 					if network_action == 0:
 						action = RailEnvActions.STOP_MOVING
