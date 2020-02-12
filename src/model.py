@@ -1,8 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-# TODO Must return actions for ALL agents ?
-
 '''
 Functions to compute output width and height (considering they could not 'square') after convolution.
 'dim' can be 'width' or 'height'
@@ -15,7 +13,6 @@ class Dueling_DQN(nn.Module):
         super(Dueling_DQN, self).__init__()
         self.action_space = action_space
         # input shape (batch_size, in_channels = height/num_rails, width/prediction_depth + 1) 
-        # TODO make this 3D?
         # self.conv1 = nn.Conv1d(in_channels=height, out_channels=64, kernel_size=1)
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=(1, width))
 

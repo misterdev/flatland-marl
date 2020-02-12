@@ -254,6 +254,9 @@ class RailObsForRailEnv(ObservationBuilder):
 		maps[a] = np.roll(maps[a], -1)
 		return maps
 	
+	def set_agent_path(self, a, path):
+		self.paths[a] = path
+
 	def _last_train_on_rail(self, a, rail, maps):
 		"""
 		Find train preceding agent 'handle' on rail.

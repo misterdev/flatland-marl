@@ -47,9 +47,6 @@ def main(args):
 	                                       )
 
 	# Maps speeds to % of appearance in the env
-	# TODO! temporary set all speed to 1
-	# speed_ration_map = {1.: 1}  # Slow freight train
-
 	speed_ration_map = {1.: 0.25,  # Fast passenger train
 	                    1. / 2.: 0.25,  # Fast freight train
 	                    1. / 3.: 0.25,  # Slow commuter train
@@ -198,7 +195,7 @@ def main(args):
 
 					# Use new bitmaps and paths
 					maps[a, :, :] = altmaps[best_i]
-					obs_builder.paths[a] = altpaths[best_i] # TODO use a function
+					obs_builder.set_agent_path(a, altpaths[best_i])
 
 					buffer_obs[a] = altobs[best_i].copy()
 					update_values[a] = True
@@ -222,12 +219,9 @@ def main(args):
 				elif info['action_required'][a]:
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					buffer_obs[a] = obs.copy()
-					update_values[a] = False # TODO are you sure? YES
+					update_values[a] = False
 					
 					crash = obs_builder.check_crash(a, maps)
-
-					if crash and args.train:  # TODO are you sure? NO
-						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
 
 					if crash:
 						network_action = 0
