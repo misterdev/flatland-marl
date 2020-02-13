@@ -1,3 +1,6 @@
+### TEST
+1. 22:30 - 1k episodes
+
 ### Fixed speed 1
 - [ ] evaluate 1k episodes
 - [ ] train 1k episodes 

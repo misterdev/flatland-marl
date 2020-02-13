@@ -121,12 +121,12 @@ class RailObsForRailEnv(ObservationBuilder):
 
 		elif agent.status == RailAgentStatus.ACTIVE:
 			# This can return None when rails are disconnected or there was an error in the DistanceMap
-			if self.paths[handle] is None:  # Railway disrupted
-				#TODO check if is None when rail disrupted
+			if self.paths[handle] is None or len(self.paths[handle]) == 0:  # Railway disrupted
+				print('[WARN] AGENT {} RAIL DISRUPTED'.format(handle))
 				action = RailEnvActions.STOP_MOVING
 			else:
 				# Get action
-				step = self.paths[handle][0] # TODO Error! IndexError: list index out of range
+				step = self.paths[handle][0]
 				next_action_element = step.next_action_element.action  # Get next_action_element
 
 				#assert step.position == agent.position TODO
