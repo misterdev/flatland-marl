@@ -115,6 +115,7 @@ def main(args):
 	for ep in range(args.num_episodes):
 		cumulative_reward = 0
 		env_done = 0
+		crash = [False] * args.num_agents
 
 		maps, info = env.reset()
 
@@ -136,7 +137,7 @@ def main(args):
 				update_values[a] = False
 				network_action = None
 				action = None
-				crash = False
+				crash[a] = False
 
 				# If agent is arrived
 				if agent.status == RailAgentStatus.DONE or agent.status == RailAgentStatus.DONE_REMOVED:
@@ -163,13 +164,9 @@ def main(args):
 					if network_action == 0:
 						action = RailEnvActions.DO_NOTHING
 					else: # Go
-						crash = obs_builder.check_crash(a, maps)
+						crash[a] = obs_builder.check_crash(a, maps)
 						
-						# Store expereince
-						if crash and args.train:
-							dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
-						
-						if crash:
+						if crash[a]:
 							network_action = 0
 							action = RailEnvActions.STOP_MOVING
 						else:
@@ -207,12 +204,9 @@ def main(args):
 					if network_action == 0:
 						action = RailEnvActions.STOP_MOVING
 					else:
-						crash = obs_builder.check_crash(a, maps, is_before_switch=True)
-
-						if crash and args.train:
-							dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], True)
+						crash[a] = obs_builder.check_crash(a, maps, is_before_switch=True)
 						
-						if crash:
+						if crash[a]:
 							network_action = 0
 							action = RailEnvActions.STOP_MOVING
 						else:
@@ -223,9 +217,9 @@ def main(args):
 				elif info['action_required'][a]:
 					update_values[a] = False
 					
-					crash = obs_builder.check_crash(a, maps)
+					crash[a] = obs_builder.check_crash(a, maps)
 
-					if crash:
+					if crash[a]:
 						network_action = 0
 						action = RailEnvActions.STOP_MOVING
 					else:
@@ -266,6 +260,11 @@ def main(args):
 			# Update replay buffer and train agent
 			if args.train:
 				for a in range(env.get_num_agents()):
+					if crash[a]:
+						# Store bad experience 
+						# TODO are you sure the last param is False? (it was True)
+						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], False)
+
 					if update_values[a] or done[a]:
 						next_obs = preprocess_obs(a, maps[a], maps, max_rails)
 						dqn.step(buffer_obs[a], network_action_dict[a], reward[a], next_obs, done[a])
