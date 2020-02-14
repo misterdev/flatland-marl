@@ -22,7 +22,7 @@ from flatland.envs.agent_utils import RailAgentStatus
 
 from src.rail_observations import RailObsForRailEnv
 from src.predictions import ShortestPathPredictorForRailEnv
-from src.preprocessing import preprocess_obs
+from src.preprocessing import ObsPreprocessor
 from src.agent import DQNAgent
 
 from src.utils.plot import plot_metric
@@ -83,7 +83,9 @@ def main(args):
 	max_rails = 100 # TODO Must be a parameter of the env (estimated)
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
 	max_steps = 200
-	
+
+	preprocessor = ObsPreprocessor(max_rails, args.keep_rail_order) # TODO! also the param
+
 	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
 	
 	if args.render:
@@ -107,6 +109,7 @@ def main(args):
 	# Episode rewards/dones/norm rewards since beginning of training TODO
 	#env_dones = []
 	
+	crash = [False] * args.num_agents
 	update_values = [False] * args.num_agents
 	buffer_obs = [None] * args.num_agents
 	next_obs = [None] * args.num_agents
@@ -115,14 +118,13 @@ def main(args):
 	for ep in range(args.num_episodes):
 		cumulative_reward = 0
 		env_done = 0
-		crash = [False] * args.num_agents
 
 		maps, info = env.reset()
 
 		# Initialize replay buffer
 		if args.train:
 			for a in range(env.get_num_agents()):
-				buffer_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
+				buffer_obs[a] = preprocessor.get_obs(a, maps[a], maps)
 
 		if args.print:
 			debug.print_bitmaps(maps)
@@ -131,18 +133,18 @@ def main(args):
 			env_renderer.reset()
 
 		for step in range(max_steps - 1):
+			# Save a copy of maps at the beginning
+			buffer_maps = maps.copy()
 			# rem first bit is 0 for agent not departed
 			for a in range(env.get_num_agents()):
 				agent = env.agents[a]
+				crash[a] = False
 				update_values[a] = False
 				network_action = None
 				action = None
-				crash[a] = False
 
 				# If agent is arrived
 				if agent.status == RailAgentStatus.DONE or agent.status == RailAgentStatus.DONE_REMOVED:
-					update_values[a] = False
-
 					# TODO if agent !removed you should leave a bit in the bitmap
 					# TODO? set bitmap only the first time
 					maps[a, :, :] = 0
@@ -151,8 +153,8 @@ def main(args):
 
 				# If agent is not departed
 				elif agent.status == RailAgentStatus.READY_TO_DEPART:
-					obs = preprocess_obs(a, maps[a], maps, max_rails)
 					update_values[a] = True
+					obs = preprocessor.get_obs(a, maps[a], maps)
 					
 					# Network chooses action
 					q_values = dqn.act(obs).cpu().data.numpy()
@@ -179,9 +181,10 @@ def main(args):
 					altmaps, altpaths = obs_builder.get_altmaps(a)
 
 					if len(altmaps) > 0:
+						update_values[a] = True
 						q_values = np.array([])
 						for i in range(len(altmaps)):
-							obs = preprocess_obs(a, altmaps[i], maps, max_rails)
+							obs = preprocessor.get_obs(a, altmaps[i], maps)
 							q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
 
 						# Epsilon-greedy action selection
@@ -196,7 +199,6 @@ def main(args):
 							maps[a, :, :] = altmaps[best_i]
 							obs_builder.set_agent_path(a, altpaths[best_i])
 
-							update_values[a] = True
 					else:
 						print('[ERROR] NO ALTHPATHS EP: {} STEP: {} AGENT: {}', ep, step, a)
 						network_action = 0
@@ -215,8 +217,6 @@ def main(args):
 		
 				# If the agent is following a rail
 				elif info['action_required'][a]:
-					update_values[a] = False
-					
 					crash[a] = obs_builder.check_crash(a, maps)
 
 					if crash[a]:
@@ -228,8 +228,6 @@ def main(args):
 						maps = obs_builder.update_bitmaps(a, maps)
 
 				else: # not action_required
-					update_values[a] = False
-
 					network_action = 1
 					action = RailEnvActions.DO_NOTHING
 					maps = obs_builder.update_bitmaps(a, maps)
@@ -265,11 +263,11 @@ def main(args):
 						# TODO are you sure the last param is False? (it was True)
 						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], False)
 
-					if update_values[a] or done[a]:
-						next_obs = preprocess_obs(a, maps[a], maps, max_rails)
+					if update_values[a] or done[a]: # TODO! check done[a]
+						next_obs = preprocessor.get_obs(a, maps[a], maps)
 						dqn.step(buffer_obs[a], network_action_dict[a], reward[a], next_obs, done[a])
 						buffer_obs[a] = next_obs.copy()
-			
+
 			for a in range(env.get_num_agents()):	
 				cumulative_reward += reward[a] # / env.get_num_agents() # Update cumulative reward (not norm)
 			
@@ -360,6 +358,7 @@ if __name__ == '__main__':
 	# Misc
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
+	parser.add_argument('--keep-rail-order', type=bool, default=True, help='Keep the rail order in bitmaps')
 	parser.add_argument('--train', action='store_true', help='Perform training')
 	parser.add_argument('--window-size', type=int, default=100, help='Number of episodes to consider for moving average when evaluating model learning curve')
 	parser.add_argument('--checkpoint-interval', type=int, default=50, help='Interval of episodes for each save of plots and model')
