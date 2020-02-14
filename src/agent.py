@@ -14,7 +14,6 @@ from src.model import Dueling_DQN
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 
-
 class DQNAgent:
 	"""Interacts with and learns from the environment."""
 
@@ -106,7 +105,6 @@ class DQNAgent:
 			Q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(-1)
 
 		# Compute Q targets for current states
-
 		Q_targets = rewards + (gamma * Q_targets_next * (1 - dones))
 
 		# Compute loss

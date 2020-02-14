@@ -3,7 +3,7 @@
 
 ### Fixed speed 1
 - [ ] evaluate 1k episodes
-- [ ] train 1k episodes 
+- [ ] train 1k episodes
 
 ### Backlog
 - [ ] Permutation of binaries in bitmap relative to the current train
@@ -12,18 +12,11 @@
 
 ### TODO
 - [ ] Calculate altpaths once
-- [x] giulia's error. NOTE: it has to do with prediction depth
-- [x] FIX
-    ```
-        Traceback (most recent call last):
-    File "src/main.py", line 370, in <module>
-        main(args)
-    File "src/main.py", line 197, in main
-        best_i = np.random.choice(np.arange(len(altmaps)))
-    File "mtrand.pyx", line 773, in numpy.random.mtrand.RandomState.choice
-    ValueError: 'a' cannot be empty unless no samples are taken
-```
 
+# TODO
+- [ ] TODO permutation of binaries
+- [ ] ALL SPEED 1 (momentaneamnete, altrimenti si prova ad aggiungere un parametro)
+- [ ] new training approach
 
 # Results
 - No train
