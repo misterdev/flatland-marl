@@ -118,6 +118,11 @@ def main(args):
 
 		maps, info = env.reset()
 
+		# Initialize replay buffer
+		if args.train:
+			for a in range(env.get_num_agents()):
+				buffer_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
+
 		if args.print:
 			debug.print_bitmaps(maps)
 
@@ -135,9 +140,8 @@ def main(args):
 
 				# If agent is arrived
 				if agent.status == RailAgentStatus.DONE or agent.status == RailAgentStatus.DONE_REMOVED:
-					obs = preprocess_obs(a, maps[a], maps, max_rails)
-					buffer_obs[a] = obs.copy()
 					update_values[a] = False
+
 					# TODO if agent !removed you should leave a bit in the bitmap
 					# TODO? set bitmap only the first time
 					maps[a, :, :] = 0
@@ -147,7 +151,6 @@ def main(args):
 				# If agent is not departed
 				elif agent.status == RailAgentStatus.READY_TO_DEPART:
 					obs = preprocess_obs(a, maps[a], maps, max_rails)
-					buffer_obs[a] = obs.copy()
 					update_values[a] = True
 					
 					# Network chooses action
@@ -180,10 +183,8 @@ def main(args):
 
 					if len(altmaps) > 0:
 						q_values = np.array([])
-						altobs = []
 						for i in range(len(altmaps)):
 							obs = preprocess_obs(a, altmaps[i], maps, max_rails)
-							altobs.append(obs)
 							q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
 
 						# Epsilon-greedy action selection
@@ -198,7 +199,6 @@ def main(args):
 							maps[a, :, :] = altmaps[best_i]
 							obs_builder.set_agent_path(a, altpaths[best_i])
 
-							buffer_obs[a] = altobs[best_i].copy()
 							update_values[a] = True
 					else:
 						print('[ERROR] NO ALTHPATHS EP: {} STEP: {} AGENT: {}', ep, step, a)
@@ -221,8 +221,6 @@ def main(args):
 		
 				# If the agent is following a rail
 				elif info['action_required'][a]:
-					obs = preprocess_obs(a, maps[a], maps, max_rails)
-					buffer_obs[a] = obs.copy()
 					update_values[a] = False
 					
 					crash = obs_builder.check_crash(a, maps)
@@ -236,16 +234,12 @@ def main(args):
 						maps = obs_builder.update_bitmaps(a, maps)
 
 				else: # not action_required
-					obs = preprocess_obs(a, maps[a], maps, max_rails)
-					buffer_obs[a] = obs.copy()
 					update_values[a] = False
 
 					network_action = 1
 					action = RailEnvActions.DO_NOTHING
 					maps = obs_builder.update_bitmaps(a, maps)
 
-				if args.train: # TODO? are you sure?
-					next_obs[a] = preprocess_obs(a, maps[a], maps, max_rails)
 
 				network_action_dict.update({a: network_action})
 				railenv_action_dict.update({a: action})
@@ -273,8 +267,9 @@ def main(args):
 			if args.train:
 				for a in range(env.get_num_agents()):
 					if update_values[a] or done[a]:
-						dqn.step(buffer_obs[a], network_action_dict[a], reward[a], next_obs[a], done[a])
-						buffer_obs[a] = next_obs[a].copy()
+						next_obs = preprocess_obs(a, maps[a], maps, max_rails)
+						dqn.step(buffer_obs[a], network_action_dict[a], reward[a], next_obs, done[a])
+						buffer_obs[a] = next_obs.copy()
 			
 			for a in range(env.get_num_agents()):	
 				cumulative_reward += reward[a] # / env.get_num_agents() # Update cumulative reward (not norm)
