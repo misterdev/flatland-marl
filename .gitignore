@@ -9,3 +9,4 @@ src/nets
 *.pyc
 checkpoints/
 temp/
+results/

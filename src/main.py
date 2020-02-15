@@ -47,10 +47,11 @@ def main(args):
 	                                       )
 
 	# Maps speeds to % of appearance in the env
-	speed_ration_map = {1.: 0.25,  # Fast passenger train
-	                    1. / 2.: 0.25,  # Fast freight train
-	                    1. / 3.: 0.25,  # Slow commuter train
-	                    1. / 4.: 0.25}  # Slow freight train
+	speed_ration_map = {1.: 1}  # Fast passenger train
+	# speed_ration_map = {1.: 0.25,  # Fast passenger train
+	#                     1. / 2.: 0.25,  # Fast freight train
+	#                     1. / 3.: 0.25,  # Slow commuter train
+	#                     1. / 4.: 0.25}  # Slow freight train
 
 	schedule_generator = sparse_schedule_generator(speed_ration_map)
 	
