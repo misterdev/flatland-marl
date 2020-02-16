@@ -85,7 +85,7 @@ def main(args):
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
 	max_steps = 200
 
-	preprocessor = ObsPreprocessor(max_rails, args.keep_rail_order) # TODO! also the param
+	preprocessor = ObsPreprocessor(max_rails, args.reorder_rails)
 
 	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
 	
@@ -359,7 +359,7 @@ if __name__ == '__main__':
 	# Misc
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
-	parser.add_argument('--keep-rail-order', type=bool, default=True, help='Keep the rail order in bitmaps')
+	parser.add_argument('--reorder-rails', action='store_true', help='Change rails order in bitmaps')
 	parser.add_argument('--train', action='store_true', help='Perform training')
 	parser.add_argument('--window-size', type=int, default=100, help='Number of episodes to consider for moving average when evaluating model learning curve')
 	parser.add_argument('--checkpoint-interval', type=int, default=50, help='Interval of episodes for each save of plots and model')
