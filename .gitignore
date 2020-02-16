@@ -10,3 +10,4 @@ src/nets
 checkpoints/
 temp/
 results/
+runs/

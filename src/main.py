@@ -8,6 +8,8 @@ import os
 
 from collections import deque
 
+from torch.utils.tensorboard import SummaryWriter
+
 # These 2 lines must go before the import from src/
 base_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(base_dir))
@@ -80,6 +82,9 @@ def main(args):
 			show_debug=True,
 			screen_height=800,
 			screen_width=800)
+
+	if args.plot:
+		writer = SummaryWriter()
 
 	max_rails = 100 # TODO Must be a parameter of the env (estimated)
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
@@ -315,14 +320,12 @@ def main(args):
 					mean_rewards[-1],
 					mean_norm_rewards[-1],
 					eps))
-			
-			# Save model and metrics
-			if args.train: # TODO! Now means are on moving-window (could also be done differently)
-				torch.save(dqn.qnetwork_local.state_dict(), results_dir + '/model.pth')
-				plot_metric(list(range(ep+1)), mean_dones, 'agents_done', path=results_dir)
-				plot_metric(list(range(ep+1)), mean_rewards, 'reward', path=results_dir)
-				plot_metric(list(range(ep+1)), mean_norm_rewards, 'norm_reward', path=results_dir)
 
+		if args.plot:
+			writer.add_scalar('mean_agent_dones', mean_agent_dones[-1], ep)
+			writer.add_scalar('mean_rewards', mean_rewards[-1], ep)
+			writer.add_scalar('mean_dones', mean_dones[-1], ep)
+			writer.add_scalar('mean_norm_rewards', mean_norm_rewards[-1], ep)
 
 if __name__ == '__main__':
 	
@@ -357,6 +360,7 @@ if __name__ == '__main__':
 	parser.add_argument('--update-every', type=int, default=10, help='How often to update the target network')
 	
 	# Misc
+	parser.add_argument('--plot', action='store_true', help='Plot execution info')
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
 	parser.add_argument('--keep-rail-order', type=bool, default=True, help='Keep the rail order in bitmaps')
