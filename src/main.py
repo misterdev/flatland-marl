@@ -326,6 +326,7 @@ def main(args):
 			writer.add_scalar('mean_rewards', mean_rewards[-1], ep)
 			writer.add_scalar('mean_dones', mean_dones[-1], ep)
 			writer.add_scalar('mean_norm_rewards', mean_norm_rewards[-1], ep)
+			writer.add_scalar('epsilon', eps, ep)
 
 if __name__ == '__main__':
 	
