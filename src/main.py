@@ -124,6 +124,8 @@ def main(args):
 	for ep in range(args.num_episodes):
 		cumulative_reward = 0
 		env_done = 0
+		altmaps = [None] * args.num_agents
+		altpaths = [[]] * args.num_agents
 
 		maps, info = env.reset()
 
@@ -183,14 +185,16 @@ def main(args):
 		
 				# If the agent is entering a switch
 				elif obs_builder.is_before_switch(a) and info['action_required'][a]:
-					# NOTE this is executed multiple times if the dqn choice is 0
-					altmaps, altpaths = obs_builder.get_altmaps(a)
+					# If the altpaths cache is empty or already contains
+					# the altpaths from the current agent's position
+					if len(altpaths[a]) == 0 or agent.position != altpaths[a][0][0].position:
+						altmaps[a], altpaths[a] = obs_builder.get_altmaps(a)
 
-					if len(altmaps) > 0:
+					if len(altmaps[a]) > 0:
 						update_values[a] = True
 						q_values = np.array([])
-						for i in range(len(altmaps)):
-							obs = preprocessor.get_obs(a, altmaps[i], maps)
+						for i in range(len(altmaps[a])):
+							obs = preprocessor.get_obs(a, altmaps[a][i], maps)
 							q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
 
 						# Epsilon-greedy action selection
@@ -200,10 +204,11 @@ def main(args):
 							best_i = argmax // 2
 						else:
 							network_action = np.random.choice([0, 1])
-							best_i = np.random.choice(np.arange(len(altmaps)))
-							# Use new bitmaps and paths
-							maps[a, :, :] = altmaps[best_i]
-							obs_builder.set_agent_path(a, altpaths[best_i])
+							best_i = np.random.choice(np.arange(len(altmaps[a])))
+						
+						# Use new bitmaps and paths
+						maps[a, :, :] = altmaps[a][best_i]
+						obs_builder.set_agent_path(a, altpaths[a][best_i])
 
 					else:
 						print('[ERROR] NO ALTHPATHS EP: {} STEP: {} AGENT: {}', ep, step, a)
@@ -265,8 +270,7 @@ def main(args):
 			if args.train:
 				for a in range(env.get_num_agents()):
 					if crash[a]:
-						# Store bad experience 
-						# TODO are you sure the last param is False? (it was True)
+						# Store bad experience
 						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], False)
 
 					if update_values[a] or done[a]: # TODO! check done[a]
