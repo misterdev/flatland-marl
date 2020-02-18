@@ -242,8 +242,7 @@ def main(args):
 					network_action = 1
 					action = RailEnvActions.DO_NOTHING
 					maps = obs_builder.update_bitmaps(a, maps)
-
-
+				
 				network_action_dict.update({a: network_action})
 				railenv_action_dict.update({a: action})
 
@@ -264,8 +263,6 @@ def main(args):
 					print('Action required? {}'.format(info['action_required'][a]))
 					print('Network action: {}'.format(network_action_dict[a]))
 					print('Railenv action: {}'.format(railenv_action_dict[a]))
-					#print('Q values: {}'.format(q_values[a]))
-			
 			# Update replay buffer and train agent
 			if args.train:
 				for a in range(env.get_num_agents()):
@@ -273,15 +270,17 @@ def main(args):
 						# Store bad experience
 						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], False)
 
-					if update_values[a] or done[a]: # TODO! check done[a]
+					if update_values[a] or done[a]:
 						next_obs = preprocessor.get_obs(a, maps[a], maps)
 						dqn.step(buffer_obs[a], network_action_dict[a], reward[a], next_obs, done[a])
 						buffer_obs[a] = next_obs.copy()
 
 			for a in range(env.get_num_agents()):	
 				cumulative_reward += reward[a] # / env.get_num_agents() # Update cumulative reward (not norm)
-			
-			if done['__all__']: # TODO! env sets done[all] = True for everyone when time limit is reached
+			 
+			# TODO? env sets done[all] = True for everyone when time limit is reached
+			# devid: I also remember this, but debuggind doesn't seem to happen
+			if done['__all__']:
 				env_done = 1
 				break
 
