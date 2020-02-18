@@ -84,7 +84,7 @@ def main(args):
 			screen_width=800)
 
 	if args.plot:
-		writer = SummaryWriter()
+		writer = SummaryWriter(log_dir='plots/' + args.model_id)
 
 	max_rails = 100 # TODO Must be a parameter of the env (estimated)
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
@@ -94,10 +94,11 @@ def main(args):
 
 	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
 	
-	if args.render:
-		file = os.path.isfile("checkpoints/"+args.model_id) # TODO
-		if file:
-			dqn.qnetwork_local.load_state_dict(torch.load(file))
+	# TODO!
+	# if args.render:
+	# 	file = os.path.isfile("checkpoints/"+args.model_id)
+	# 	if file:
+	# 		dqn.qnetwork_local.load_state_dict(torch.load(file))
 	
 	eps = args.start_eps
 	railenv_action_dict = {}
@@ -211,7 +212,7 @@ def main(args):
 						obs_builder.set_agent_path(a, altpaths[a][best_i])
 
 					else:
-						print('[ERROR] NO ALTHPATHS EP: {} STEP: {} AGENT: {}', ep, step, a)
+						print('[ERROR] NO ALTHPATHS EP: {} STEP: {} AGENT: {}'.format(ep, step, a))
 						network_action = 0
 
 					if network_action == 0:
@@ -324,6 +325,9 @@ def main(args):
 					mean_norm_rewards[-1],
 					eps))
 
+		if args.train and ep != 0 and (ep + 1) % args.save_interval == 0:
+			torch.save(dqn.qnetwork_local, results_dir + 'weights.pt' )
+
 		if args.plot:
 			writer.add_scalar('mean_agent_dones', mean_agent_dones[-1], ep)
 			writer.add_scalar('mean_rewards', mean_rewards[-1], ep)
@@ -332,8 +336,8 @@ def main(args):
 			writer.add_scalar('epsilon', eps, ep)
 
 if __name__ == '__main__':
-	
 	parser = argparse.ArgumentParser(description='Railobs')
+
 	# Env parameters
 	parser.add_argument('--network-action-space', type=int, default=2, help='Number of actions allowed in the environment')
 	parser.add_argument('--width', type=int, default=20, help='Environment width')
@@ -362,16 +366,19 @@ if __name__ == '__main__':
 	parser.add_argument('--tau', type=float, default=1e-3, help='Interpolation parameter for soft update of target network weights')
 	parser.add_argument('--lr', type=float, default=0.00005, help='Learning rate for SGD')
 	parser.add_argument('--update-every', type=int, default=10, help='How often to update the target network')
-	
-	# Misc
-	parser.add_argument('--plot', action='store_true', help='Plot execution info')
-	parser.add_argument('--debug', action='store_true', help='Print debug info')
-	parser.add_argument('--render', action='store_true', help='Render map')
+
+	# Algo
 	parser.add_argument('--reorder-rails', action='store_true', help='Change rails order in bitmaps')
 	parser.add_argument('--train', action='store_true', help='Perform training')
-	parser.add_argument('--window-size', type=int, default=100, help='Number of episodes to consider for moving average when evaluating model learning curve')
-	parser.add_argument('--checkpoint-interval', type=int, default=50, help='Interval of episodes for each save of plots and model')
+	parser.add_argument('--save-interval', type=int, default=100, help='Interval of episodes for each save of model')
+	parser.add_argument('--checkpoint-interval', type=int, default=50, help='Interval of episodes for each print')
+
+	# Misc
+	parser.add_argument('--plot', action='store_true', help='Plot execution info')
 	parser.add_argument('--print', action='store_true', help='Save internal representations as files')
+	parser.add_argument('--debug', action='store_true', help='Print debug info')
+	parser.add_argument('--render', action='store_true', help='Render map')
+	parser.add_argument('--window-size', type=int, default=100, help='Number of episodes to consider for moving average when evaluating model learning curve')
 	
 	args = parser.parse_args()
 	main(args)

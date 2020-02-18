@@ -10,4 +10,7 @@ src/nets
 checkpoints/
 temp/
 results/
+
+# PLOTTING
 runs/
+plots/

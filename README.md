@@ -8,5 +8,5 @@ python src/main.py --render
 
 ## Training
 ```bash
-python src/main.py --train --num-episodes=1000 --prediction-depth=150 --eps=0.9998 --checkpoint-interval=20
+python src/main.py --train --num-episodes=10000 --prediction-depth=150 --eps=0.9998 --checkpoint-interval=100 --buffer-size=10000
 ```
