@@ -2,7 +2,7 @@
 
 ## Important
 - [ ] TODO permutation of binaries
-- [ ] ALL SPEED 1 (momentaneamnete, altrimenti si prova ad aggiungere un parametro)
+- [x] ALL SPEED 1 (momentaneamnete, altrimenti si prova ad aggiungere un parametro)
 - [ ] new training approach
 - [ ] bigger simulations
 

@@ -1,8 +1,4 @@
 # RESULTS
-## LATEST TESTS
-1. 22:30 - 1k episodes FAILED
-2. 19:30 - 1k epis - unitary speed
-
 
 # Results
 - EVALUATION

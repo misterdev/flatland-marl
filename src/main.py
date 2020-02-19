@@ -84,7 +84,7 @@ def main(args):
 			screen_width=800)
 
 	if args.plot:
-		writer = SummaryWriter(log_dir='plots/' + args.model_id)
+		writer = SummaryWriter(log_dir='runs/' + args.model_id)
 
 	max_rails = 100 # TODO Must be a parameter of the env (estimated)
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
