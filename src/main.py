@@ -375,10 +375,16 @@ if __name__ == '__main__':
 
 	# Misc
 	parser.add_argument('--plot', action='store_true', help='Plot execution info')
+	parser.add_argument('--profile', action='store_true', help='Print a profiling of where the program spent most of its time')
 	parser.add_argument('--print', action='store_true', help='Save internal representations as files')
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
 	parser.add_argument('--window-size', type=int, default=100, help='Number of episodes to consider for moving average when evaluating model learning curve')
 	
 	args = parser.parse_args()
-	main(args)
+
+	if args.profile:
+		import cProfile
+		cProfile.run('main(args)')
+	else:
+		main(args)
