@@ -112,7 +112,7 @@ def main(args):
 	
 	crash = [False] * args.num_agents
 	update_values = [False] * args.num_agents
-	buffer_obs = [None] * args.num_agents
+	buffer_obs = [[]] * args.num_agents
 	next_obs = [None] * args.num_agents
 
 	############ Main loop
@@ -266,9 +266,9 @@ def main(args):
 
 					if update_values[a] and not buffer_done[a]:
 						# If I had an obs from a previous switch
-						if buffer_obs[a] != None:
+						if len(buffer_obs[a]) != 0:
 							dqn.step(buffer_obs[a], 1, buffer_rew[a], curr_obs[a], done[a])
-							buffer_obs[a] = None
+							buffer_obs[a] = []
 							buffer_rew[a] = 0
 
 						if network_action_dict[a] == 0:
@@ -278,7 +278,7 @@ def main(args):
 							buffer_obs[a] = curr_obs[a].copy()
 
 					# Cache reward only if we have an obs from a prev switch
-					if buffer_obs[a] != None:
+					if len(buffer_obs[a]) != 0:
 						buffer_rew[a] += reward[a]
 
 					# Now update the done cache to avoid adding experience many times
