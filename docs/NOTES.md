@@ -37,3 +37,7 @@ FREE (Giovedi Pome / Venerdi Pome)
 
 APRILE:
 ALLDAYS
+
+////////
+- reorder bitmaps
+    - prima riga vuota per trani che devono partire

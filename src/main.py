@@ -94,12 +94,6 @@ def main(args):
 
 	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
 	
-	# TODO!
-	# if args.render:
-	# 	file = os.path.isfile("checkpoints/"+args.model_id)
-	# 	if file:
-	# 		dqn.qnetwork_local.load_state_dict(torch.load(file))
-	
 	eps = args.start_eps
 	railenv_action_dict = {}
 	network_action_dict = {}
