@@ -113,7 +113,6 @@ def main(args):
 	crash = [False] * args.num_agents
 	update_values = [False] * args.num_agents
 	buffer_obs = [[]] * args.num_agents
-	next_obs = [None] * args.num_agents
 
 	############ Main loop
 	for ep in range(args.num_episodes):
@@ -264,25 +263,30 @@ def main(args):
 					# if crash[a]: # TODO?
 						# Store bad experience
 
-					if update_values[a] and not buffer_done[a]:
-						# If I had an obs from a previous switch
+					if not args.switch2switch:
+						if update_values[a] and not buffer_done[a]:
+							next_obs = preprocessor.get_obs(a, maps[a], maps)
+							dqn.step(curr_obs[a], network_action_dict[a], reward[a], next_obs, done[a])
+
+					else:
+						if update_values[a] and not buffer_done[a]:
+							# If I had an obs from a previous switch
+							if len(buffer_obs[a]) != 0:
+								dqn.step(buffer_obs[a], 1, buffer_rew[a], curr_obs[a], done[a])
+								buffer_obs[a] = []
+								buffer_rew[a] = 0
+
+							if network_action_dict[a] == 0:
+								dqn.step(curr_obs[a], 1, reward[a], curr_obs[a], False)
+							elif network_action_dict[a] == 1:
+								# I store the obs and update at the next switch
+								buffer_obs[a] = curr_obs[a].copy()
+
+						# Cache reward only if we have an obs from a prev switch
 						if len(buffer_obs[a]) != 0:
-							dqn.step(buffer_obs[a], 1, buffer_rew[a], curr_obs[a], done[a])
-							buffer_obs[a] = []
-							buffer_rew[a] = 0
-
-						if network_action_dict[a] == 0:
-							dqn.step(curr_obs[a], 1, reward[a], curr_obs[a], False)
-						elif network_action_dict[a] == 1:
-							# I store the obs and update at the next switch
-							buffer_obs[a] = curr_obs[a].copy()
-
-					# Cache reward only if we have an obs from a prev switch
-					if len(buffer_obs[a]) != 0:
-						buffer_rew[a] += reward[a]
+							buffer_rew[a] += reward[a]
 
 					# Now update the done cache to avoid adding experience many times
-					# TODO? maybe use RailAgentStatus?
 					buffer_done[a] = done[a]
 
 			for a in range(env.get_num_agents()):	
@@ -378,6 +382,7 @@ if __name__ == '__main__':
 
 	# Algo
 	parser.add_argument('--reorder-rails', action='store_true', help='Change rails order in bitmaps')
+	parser.add_argument('--switch2switch', action='store_true', help='Train using only bitmaps where the agent is before a switch')
 	parser.add_argument('--train', action='store_true', help='Perform training')
 	parser.add_argument('--save-interval', type=int, default=100, help='Interval of episodes for each save of model')
 	parser.add_argument('--checkpoint-interval', type=int, default=50, help='Interval of episodes for each print')
