@@ -94,12 +94,6 @@ def main(args):
 
 	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
 	
-	# TODO!
-	# if args.render:
-	# 	file = os.path.isfile("checkpoints/"+args.model_id)
-	# 	if file:
-	# 		dqn.qnetwork_local.load_state_dict(torch.load(file))
-	
 	eps = args.start_eps
 	railenv_action_dict = {}
 	network_action_dict = {}
@@ -118,7 +112,7 @@ def main(args):
 	
 	crash = [False] * args.num_agents
 	update_values = [False] * args.num_agents
-	buffer_obs = [None] * args.num_agents
+	buffer_obs = [[]] * args.num_agents
 	next_obs = [None] * args.num_agents
 
 	############ Main loop
@@ -127,14 +121,11 @@ def main(args):
 		env_done = 0
 		altmaps = [None] * args.num_agents
 		altpaths = [[]] * args.num_agents
+		buffer_rew = [0] * args.num_agents
+		buffer_done = [False] * args.num_agents
+		curr_obs = [None] * args.num_agents
 
 		maps, info = env.reset()
-
-		# Initialize replay buffer
-		if args.train:
-			for a in range(env.get_num_agents()):
-				buffer_obs[a] = preprocessor.get_obs(a, maps[a], maps)
-
 		if args.print:
 			debug.print_bitmaps(maps)
 
@@ -163,8 +154,9 @@ def main(args):
 				# If agent is not departed
 				elif agent.status == RailAgentStatus.READY_TO_DEPART:
 					update_values[a] = True
-					obs = preprocessor.get_obs(a, maps[a], maps)
-					
+					obs = preprocessor.get_obs(a, maps[a], buffer_maps)
+					curr_obs[a] = obs.copy()
+
 					# Network chooses action
 					q_values = dqn.act(obs).cpu().data.numpy()
 					if np.random.random() > eps:
@@ -193,10 +185,11 @@ def main(args):
 
 					if len(altmaps[a]) > 0:
 						update_values[a] = True
+						altobs = [None] * len(altmaps[a])
 						q_values = np.array([])
 						for i in range(len(altmaps[a])):
-							obs = preprocessor.get_obs(a, altmaps[a][i], maps)
-							q_values = np.concatenate([q_values, dqn.act(obs).cpu().data.numpy()])
+							altobs[i] = preprocessor.get_obs(a, altmaps[a][i], buffer_maps)
+							q_values = np.concatenate([q_values, dqn.act(altobs[i]).cpu().data.numpy()])
 
 						# Epsilon-greedy action selection
 						if np.random.random() > eps:
@@ -210,6 +203,7 @@ def main(args):
 						# Use new bitmaps and paths
 						maps[a, :, :] = altmaps[a][best_i]
 						obs_builder.set_agent_path(a, altpaths[a][best_i])
+						curr_obs[a] = altobs[best_i].copy()
 
 					else:
 						print('[ERROR] NO ALTHPATHS EP: {} STEP: {} AGENT: {}'.format(ep, step, a))
@@ -267,14 +261,29 @@ def main(args):
 			# Update replay buffer and train agent
 			if args.train:
 				for a in range(env.get_num_agents()):
-					if crash[a]:
+					# if crash[a]: # TODO?
 						# Store bad experience
-						dqn.step(buffer_obs[a], 1, -2000, buffer_obs[a], False)
 
-					if update_values[a] or done[a]:
-						next_obs = preprocessor.get_obs(a, maps[a], maps)
-						dqn.step(buffer_obs[a], network_action_dict[a], reward[a], next_obs, done[a])
-						buffer_obs[a] = next_obs.copy()
+					if update_values[a] and not buffer_done[a]:
+						# If I had an obs from a previous switch
+						if len(buffer_obs[a]) != 0:
+							dqn.step(buffer_obs[a], 1, buffer_rew[a], curr_obs[a], done[a])
+							buffer_obs[a] = []
+							buffer_rew[a] = 0
+
+						if network_action_dict[a] == 0:
+							dqn.step(curr_obs[a], 1, reward[a], curr_obs[a], False)
+						elif network_action_dict[a] == 1:
+							# I store the obs and update at the next switch
+							buffer_obs[a] = curr_obs[a].copy()
+
+					# Cache reward only if we have an obs from a prev switch
+					if len(buffer_obs[a]) != 0:
+						buffer_rew[a] += reward[a]
+
+					# Now update the done cache to avoid adding experience many times
+					# TODO? maybe use RailAgentStatus?
+					buffer_done[a] = done[a]
 
 			for a in range(env.get_num_agents()):	
 				cumulative_reward += reward[a] # / env.get_num_agents() # Update cumulative reward (not norm)
@@ -375,10 +384,16 @@ if __name__ == '__main__':
 
 	# Misc
 	parser.add_argument('--plot', action='store_true', help='Plot execution info')
+	parser.add_argument('--profile', action='store_true', help='Print a profiling of where the program spent most of its time')
 	parser.add_argument('--print', action='store_true', help='Save internal representations as files')
 	parser.add_argument('--debug', action='store_true', help='Print debug info')
 	parser.add_argument('--render', action='store_true', help='Render map')
 	parser.add_argument('--window-size', type=int, default=100, help='Number of episodes to consider for moving average when evaluating model learning curve')
 	
 	args = parser.parse_args()
-	main(args)
+
+	if args.profile:
+		import cProfile
+		cProfile.run('main(args)')
+	else:
+		main(args)
