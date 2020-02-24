@@ -370,15 +370,15 @@ if __name__ == '__main__':
 	parser.add_argument('--min-duration', type=int, default=0, help='Min duration of malfunction')
 	parser.add_argument('--max-duration', type=int, default=0, help='Max duration of malfunction')
 	parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
-	parser.add_argument('--prediction-depth', type=int, default=500, help='Prediction depth for shortest path strategy, i.e. length of a path')
+	parser.add_argument('--prediction-depth', type=int, default=150, help='Prediction depth for shortest path strategy, i.e. length of a path')
 	
 	# Training
 	parser.add_argument('--model-id', type=str, default="ddqn-example", help="Model name/id")
-	parser.add_argument('--num-episodes', type=int, default=15000, help="Number of episodes to run")
+	parser.add_argument('--num-episodes', type=int, default=10000, help="Number of episodes to run")
 	parser.add_argument('--start-eps', type=float, default=1.0, help="Initial value of epsilon")
 	parser.add_argument('--end-eps', type=float, default=0.005, help="Lower limit of epsilon (i.e. can't decrease more)")
 	parser.add_argument('--eps-decay', type=float, default=0.998, help="Factor to decrease eps in eps-greedy")
-	parser.add_argument('--buffer-size', type=int, default=100000, help='Size of experience replay buffer (i.e. number of tuples')
+	parser.add_argument('--buffer-size', type=int, default=10000, help='Size of experience replay buffer (i.e. number of tuples')
 	parser.add_argument('--batch-size', type=int, default=512, help='Size of mini-batch for replay buffer')
 	parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
 	parser.add_argument('--tau', type=float, default=1e-3, help='Interpolation parameter for soft update of target network weights')
@@ -390,8 +390,8 @@ if __name__ == '__main__':
 	parser.add_argument('--switch2switch', action='store_true', help='Train using only bitmaps where the agent is before a switch')
 	parser.add_argument('--train', action='store_true', help='Perform training')
 	parser.add_argument('--load-path', type=str, default=None, help="Weights path")
-	parser.add_argument('--save-interval', type=int, default=100, help='Interval of episodes for each save of model')
-	parser.add_argument('--checkpoint-interval', type=int, default=50, help='Interval of episodes for each print')
+	parser.add_argument('--save-interval', type=int, default=2500, help='Interval of episodes for each save of model')
+	parser.add_argument('--checkpoint-interval', type=int, default=200, help='Interval of episodes for each print')
 
 	# Misc
 	parser.add_argument('--plot', action='store_true', help='Plot execution info')
