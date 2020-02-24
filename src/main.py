@@ -93,7 +93,12 @@ def main(args):
 	preprocessor = ObsPreprocessor(max_rails, args.reorder_rails)
 
 	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
-	
+
+	if args.load_path:
+		file = os.path.isfile(args.load_path)
+		if file:
+			dqn.qnetwork_local.load_state_dict(torch.load(args.load_path))
+
 	eps = args.start_eps
 	railenv_action_dict = {}
 	network_action_dict = {}
@@ -339,7 +344,7 @@ def main(args):
 					eps))
 
 		if args.train and ep != 0 and (ep + 1) % args.save_interval == 0:
-			torch.save(dqn.qnetwork_local, results_dir + 'weights.pt' )
+			torch.save(dqn.qnetwork_local.state_dict(), results_dir + '/weights.pt' )
 
 		if args.plot:
 			writer.add_scalar('mean_agent_dones', mean_agent_dones[-1], ep)
@@ -384,6 +389,7 @@ if __name__ == '__main__':
 	parser.add_argument('--reorder-rails', action='store_true', help='Change rails order in bitmaps')
 	parser.add_argument('--switch2switch', action='store_true', help='Train using only bitmaps where the agent is before a switch')
 	parser.add_argument('--train', action='store_true', help='Perform training')
+	parser.add_argument('--load-path', type=str, default=None, help="Weights path")
 	parser.add_argument('--save-interval', type=int, default=100, help='Interval of episodes for each save of model')
 	parser.add_argument('--checkpoint-interval', type=int, default=50, help='Interval of episodes for each print')
 
