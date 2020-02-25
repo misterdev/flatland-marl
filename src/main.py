@@ -265,8 +265,9 @@ def main(args):
 			# Update replay buffer and train agent
 			if args.train:
 				for a in range(env.get_num_agents()):
-					# if crash[a]: # TODO?
+					if args.crash_penalty and crash[a]:
 						# Store bad experience
+						dqn.step(curr_obs[a], 1, -100, curr_obs[a], True)
 
 					if not args.switch2switch:
 						if update_values[a] and not buffer_done[a]:
@@ -386,6 +387,7 @@ if __name__ == '__main__':
 	parser.add_argument('--update-every', type=int, default=10, help='How often to update the target network')
 
 	# Algo
+	parser.add_argument('--crash-penalty', action='store_true', help='Add crash penalty for wrong actions')
 	parser.add_argument('--reorder-rails', action='store_true', help='Change rails order in bitmaps')
 	parser.add_argument('--switch2switch', action='store_true', help='Train using only bitmaps where the agent is before a switch')
 	parser.add_argument('--train', action='store_true', help='Perform training')
