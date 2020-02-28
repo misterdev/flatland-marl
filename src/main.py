@@ -98,6 +98,7 @@ def main(args):
 		file = os.path.isfile(args.load_path)
 		if file:
 			dqn.qnetwork_local.load_state_dict(torch.load(args.load_path))
+			print('WEIGHTS LOADED from: ', args.load_path)
 
 	eps = args.start_eps
 	railenv_action_dict = {}
