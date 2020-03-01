@@ -45,6 +45,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		self.cell_to_id_node = {} # Map cell position : id_node
 		self.id_node_to_cell = {} # Map id_node to cell position
 		self.connections = {} # Map id_node : connections(node)
+		#self.adjacency_map = {} # Map id_node : 
 		self.info = {} # Map id_edge : tuple (CardinalNode1, CardinalNode2, edge_length)
 		self.id_edge_to_cells = {} # Map id_edge : list of tuples (cell pos, crossing dir) in rail (nodes are not counted)
 		self.nodes = set() # Set of node ids
@@ -141,6 +142,10 @@ class RailObsForRailEnv(ObservationBuilder):
 				self.paths[handle] = self.paths[handle][1:]
 
 		return action
+	
+	# Getter
+	def get_info_connections(self):
+		return self.info, self.connections
 
 	def is_before_switch(self, a):
 		agent = self.env.agents[a]

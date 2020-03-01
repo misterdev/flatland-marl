@@ -85,12 +85,12 @@ def main(args):
 
 	if args.plot:
 		writer = SummaryWriter(log_dir='runs/' + args.model_id)
-
-	max_rails = 100 # TODO Must be a parameter of the env (estimated)
+	# TODO Must be a parameter of the env (estimated)
+	max_rails = 15 if args.cut_bitmap else 70 
 	# max_steps = env.compute_max_episode_steps(env.width, env.height)
 	max_steps = 200
 
-	preprocessor = ObsPreprocessor(max_rails, args.reorder_rails)
+	preprocessor = ObsPreprocessor(max_rails, args.reorder_rails, args.cut_bitmap)
 
 	dqn = DQNAgent(args, bitmap_height=max_rails * 3, action_space=2)
 
@@ -131,6 +131,8 @@ def main(args):
 		curr_obs = [None] * args.num_agents
 
 		maps, info = env.reset()
+		info, connections = obs_builder.get_info_connections()
+
 		if args.print:
 			debug.print_bitmaps(maps)
 
@@ -159,7 +161,9 @@ def main(args):
 				# If agent is not departed
 				elif agent.status == RailAgentStatus.READY_TO_DEPART:
 					update_values[a] = True
-					obs = preprocessor.get_obs(a, maps[a], buffer_maps)
+					# In teoria quando parte non ha altpaths?
+					# altmaps[a], altpaths[a] = obs_builder.get_altmaps(a)
+					obs = preprocessor.get_obs(a, maps[a], buffer_maps, info, connections)
 					curr_obs[a] = obs.copy()
 
 					# Network chooses action
@@ -186,14 +190,16 @@ def main(args):
 					# If the altpaths cache is empty or already contains
 					# the altpaths from the current agent's position
 					if len(altpaths[a]) == 0 or agent.position != altpaths[a][0][0].position:
-						altmaps[a], altpaths[a] = obs_builder.get_altmaps(a)
+						altmaps[a], altpaths[a] = obs_builder.get_altmaps(a) # not reordered yet
 
 					if len(altmaps[a]) > 0:
 						update_values[a] = True
 						altobs = [None] * len(altmaps[a])
 						q_values = np.array([])
 						for i in range(len(altmaps[a])):
-							altobs[i] = preprocessor.get_obs(a, altmaps[a][i], buffer_maps)
+							# TODO Qua ho già le alt rails, obs reordered
+							#temp_maps = 
+							altobs[i] = preprocessor.get_obs(a, altmaps[a][i], buffer_maps, info, connections)
 							q_values = np.concatenate([q_values, dqn.act(altobs[i]).cpu().data.numpy()])
 
 						# Epsilon-greedy action selection
@@ -205,7 +211,7 @@ def main(args):
 							network_action = np.random.choice([0, 1])
 							best_i = np.random.choice(np.arange(len(altmaps[a])))
 						
-						# Use new bitmaps and paths
+						# Use new bitmaps and paths (alternative becomes new one)
 						maps[a, :, :] = altmaps[a][best_i]
 						obs_builder.set_agent_path(a, altpaths[a][best_i])
 						curr_obs[a] = altobs[best_i].copy()
@@ -271,15 +277,15 @@ def main(args):
 						dqn.step(curr_obs[a], 1, -100, curr_obs[a], True)
 
 					if not args.switch2switch:
-						if update_values[a] and not buffer_done[a]:
-							next_obs = preprocessor.get_obs(a, maps[a], maps)
+						if update_values[a] and not buffer_done[a]: 
+							next_obs = preprocessor.get_obs(a, maps[a], maps, info, connections)
 							dqn.step(curr_obs[a], network_action_dict[a], reward[a], next_obs, done[a])
 
-					else:
+					else: # Se switch2switch
 						if update_values[a] and not buffer_done[a]:
 							# If I had an obs from a previous switch
 							if len(buffer_obs[a]) != 0:
-								dqn.step(buffer_obs[a], 1, buffer_rew[a], curr_obs[a], done[a])
+								dqn.step(buffer_obs[a], 1, buffer_rew[a], curr_obs[a], done[a]) # TODO Qua non le sto riordinando...
 								buffer_obs[a] = []
 								buffer_rew[a] = 0
 
@@ -390,6 +396,7 @@ if __name__ == '__main__':
 	# Algo
 	parser.add_argument('--crash-penalty', action='store_true', help='Add crash penalty for wrong actions')
 	parser.add_argument('--reorder-rails', action='store_true', help='Change rails order in bitmaps')
+	parser.add_argument('--cut-bitmap', action='store_true', help='Apply cut to bitmap (works only after reordering rails')
 	parser.add_argument('--switch2switch', action='store_true', help='Train using only bitmaps where the agent is before a switch')
 	parser.add_argument('--train', action='store_true', help='Perform training')
 	parser.add_argument('--load-path', type=str, default=None, help="Weights path")
