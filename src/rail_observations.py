@@ -510,8 +510,6 @@ class RailObsForRailEnv(ObservationBuilder):
 						else:
 							break
 
-		edges = self.info.keys()
-
 		self.nodes = nodes # Set of nodes
 		self.edges = self.info.keys() # Set of edges
 		self.num_rails = len(self.edges)
