@@ -44,7 +44,6 @@ class RailObsForRailEnv(ObservationBuilder):
 		# Not all of them are necessary
 		self.cell_to_id_node = {} # Map cell position : id_node
 		self.id_node_to_cell = {} # Map id_node to cell position
-		self.connections = {} # Map id_node : connections(node)
 		self.info = {} # Map id_edge : tuple (CardinalNode1, CardinalNode2, edge_length)
 		self.id_edge_to_cells = {} # Map id_edge : list of tuples (cell pos, crossing dir) in rail (nodes are not counted)
 		self.nodes = set() # Set of node ids
@@ -61,7 +60,6 @@ class RailObsForRailEnv(ObservationBuilder):
 	def reset(self):
 		self.cell_to_id_node = {}
 		self.id_node_to_cell = {}
-		self.connections = {}
 		self.info = {}
 		self.id_edge_to_cells = {}
 		self.nodes = set()
@@ -129,7 +127,6 @@ class RailObsForRailEnv(ObservationBuilder):
 				step = self.paths[handle][0]
 				next_action_element = step.next_action_element.action  # Get next_action_element
 
-				#assert step.position == agent.position TODO
 				# Just to use the correct form/name
 				if next_action_element == 1:
 					action = RailEnvActions.MOVE_LEFT
@@ -239,7 +236,7 @@ class RailObsForRailEnv(ObservationBuilder):
 			next_rail, next_dir = self._get_rail_dir(a, maps, ts=tpc)
 
 			# Check if rail is already occupied to compute new exit time
-			last, last_exit = self._last_train_on_rail(a, next_rail, maps)
+			_, last_exit = self._last_train_on_rail(a, next_rail, maps)
 			if last_exit > 0:
 				# tpc: skips the first bits that are curr_rail
 				curr_exit = np.argmax(maps[a, next_rail, tpc:] == 0)
@@ -313,11 +310,9 @@ class RailObsForRailEnv(ObservationBuilder):
 
 	def _get_edge_from_cell(self, cell):
 		"""
-
 		:param cell: Cell for which we want to find the associated rail id.
 		:return: A tuple (id rail, dist) where dist is the distance as offset from the beginning of the rail.
 		"""
-
 		for edge in self.id_edge_to_cells.keys():
 			cells = [cell[0] for cell in self.id_edge_to_cells[edge]] 
 			if cell in cells:
@@ -373,7 +368,6 @@ class RailObsForRailEnv(ObservationBuilder):
 			# Not reversed because it's already relative to a switch
 			agent_entry_node = CardinalNode(node_id, cp)
 
-
 		holes = 0
 		# Fill rail occupancy according to predicted position at ts
 		for ts in range(0, len(path)):
@@ -419,6 +413,7 @@ class RailObsForRailEnv(ObservationBuilder):
 		:return: 
 		"""
 		id_node_counter = 0
+		connections = {}
 		# targets = [agent.target for agent in self.env.agents]
 
 		# Identify cells hat are nodes (switches or diamond crossings)
@@ -455,7 +450,7 @@ class RailObsForRailEnv(ObservationBuilder):
 				if is_switch or is_crossing: #or is_target:
 					# Add node - keep info on cell position
 					# Update only for nodes that are switches
-					self.connections.update({id_node_counter: connections_matrix})
+					connections.update({id_node_counter: connections_matrix})
 					self.id_node_to_cell.update({id_node_counter: (i, j)})
 					self.cell_to_id_node.update({(i, j): id_node_counter})
 					id_node_counter += 1
@@ -463,11 +458,11 @@ class RailObsForRailEnv(ObservationBuilder):
 		# Enumerate edges from these nodes
 		id_edge_counter = 0
 		# Start from connections of one node and follow path until next switch is found
-		nodes = self.connections.keys()  # ids
+		nodes = connections.keys()  # ids
 		visited = set()  # Keeps set of CardinalNodes that were already visited
 		for n in nodes:
 			for cp in range(4):  # Check edges from the 4 cardinal points
-				if np.count_nonzero(self.connections[n][cp, :]) > 0:
+				if np.count_nonzero(connections[n][cp, :]) > 0:
 					visited.add(CardinalNode(n, cp))  # Add to visited
 					cells_sequence = []
 					node_found = False
