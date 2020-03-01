@@ -50,10 +50,12 @@ def main(args):
 
 	# Maps speeds to % of appearance in the env
 	speed_ration_map = {1.: 1}  # Fast passenger train
-	# speed_ration_map = {1.: 0.25,  # Fast passenger train
-	#                     1. / 2.: 0.25,  # Fast freight train
-	#                     1. / 3.: 0.25,  # Slow commuter train
-	#                     1. / 4.: 0.25}  # Slow freight train
+	
+	if args.multi_speed:
+		speed_ration_map = {1.: 0.25,  # Fast passenger train
+							1. / 2.: 0.25,  # Fast freight train
+							1. / 3.: 0.25,  # Slow commuter train
+							1. / 4.: 0.25}  # Slow freight train
 
 	schedule_generator = sparse_schedule_generator(speed_ration_map)
 	
@@ -373,6 +375,7 @@ if __name__ == '__main__':
 	parser.add_argument('--max-duration', type=int, default=0, help='Max duration of malfunction')
 	parser.add_argument('--predictor', type=str, default='ShortestPathPredictorForRailEnv', help='Class used to predict agent paths and help observation building')
 	parser.add_argument('--prediction-depth', type=int, default=150, help='Prediction depth for shortest path strategy, i.e. length of a path')
+	parser.add_argument('--multi-speed', action='store_true', help='Enable agents with fractionary speeds')
 	
 	# Training
 	parser.add_argument('--model-id', type=str, default="ddqn-example", help="Model name/id")
