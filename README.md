@@ -1,4 +1,5 @@
 # Solution to the Flatland Challenge
+2019 Edition - https://www.aicrowd.com/challenges/flatland-challenge
 
 # Usage
 ### Train
@@ -21,16 +22,12 @@ python src/main.py --render
 python src/main.py --plot
 ```
 
-### Docs
+# Docs
 
-* Devid Farinelli, [_Apprendimento con rinforzo applicato allo scheduling dei treni per la Flatland challenge (Italian only)_](https://amslaurea.unibo.it/20487/1/farinelli_devid_tesi.pdf).
-* Giulia Cantini, [_FLATLAND: A study of Deep Reinforcement Learning methods applied to the vehicle rescheduling problem in a railway environment_](https://amslaurea.unibo.it/20412/1/thesis_giulia_cantini.pdf)
-
-
-# Observations
+## Observations
 Observations are obtained by concatenating the _"rail occupancy bitmap"_ of an agent with the _"heatmaps"_.
 
-## Rail occupancy bitmaps
+### Rail occupancy bitmaps
 A _"rail occupancy bitmap"_ shows on which rail and in which direction the agent is traveling at every timestep and is obtained as follows:
 
 1. A directed graph representation of the railway network is generated trough BFS, each node is a switch and each edge is a rail between two switches:
@@ -54,3 +51,17 @@ Each agent computes 2 heatmaps, one positive and one negative, both are generate
 
 ![shortest path](docs/images/heatmaps.png)
 
+## Network
+The architecture used is a Dueling DQN, where the input is a Conv2D layer that processes a concatenation of the agent bitmap, 
+the positive and the negative heatmaps.
+Then data goes through two separate streams, the value (red) and the advantage (blue) 
+to be recombined in the final output Q values (purple).
+
+![network_architecture](docs/images/dueling_nn.png)
+
+## Training 
+
+For more detailed information on the approaches see:
+
+* Devid Farinelli, [_Apprendimento con rinforzo applicato allo scheduling dei treni per la Flatland challenge_](https://amslaurea.unibo.it/20487/1/farinelli_devid_tesi.pdf) (Italian only)
+* Giulia Cantini, [_FLATLAND: A study of Deep Reinforcement Learning methods applied to the vehicle rescheduling problem in a railway environment_](https://amslaurea.unibo.it/20412/1/thesis_giulia_cantini.pdf)
