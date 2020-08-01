@@ -60,6 +60,11 @@ to be recombined in the final output Q values (purple).
 ![network_architecture](docs/images/dueling_nn.png)
 
 ## Training 
+The training algorithm follows a Double Q Learning with Random Replay Buffer 
+where the action space is reduced to 2 actions (stop and go) and the agent choices are based on
+a number of alternative paths that can be generated at every bifurcation point. At every fork the most
+promising path is chosen.
+
 
 For more detailed information on the approaches see:
 
