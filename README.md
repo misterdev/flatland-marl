@@ -45,7 +45,7 @@ A _"rail occupancy bitmap"_ shows on which rail and in which direction the agent
     ![shortest path](docs/images/bitmap.png)
 
 ## Heatmaps
-Heatmaps are used to provide informations about how the traffic is distributed across the rails over time.
+Heatmaps are used to provide information about how the traffic is distributed across the rails over time.
 
 Each agent computes 2 heatmaps, one positive and one negative, both are generated summing the bitmaps of all the other agents.
 
